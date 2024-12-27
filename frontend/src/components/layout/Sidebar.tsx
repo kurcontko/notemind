@@ -30,14 +30,14 @@ export const Sidebar = ({ isOpen, onClose, selectedMemoryId, onMemorySelect }: S
   return (
     <div
       className={cn(
-        "fixed lg:sticky top-0 left-0 z-50 flex h-screen w-72 flex-col border-r bg-white transition-transform duration-300 dark:border-gray-800 dark:bg-gray-900",
+        "fixed lg:sticky top-0 left-0 z-50 flex h-screen w-72 flex-col bg-gray-50 transition-transform duration-300 dark:bg-gray-900/50",
         isOpen ? "translate-x-0" : "-translate-x-full",
         "lg:translate-x-0"
       )}
     >
       {/* Header */}
-      <div className="flex h-14 items-center justify-between border-b px-4 dark:border-gray-800">
-        <h2 className="text-lg font-semibold">Memories</h2>
+      <div className="flex h-14 items-center justify-between px-4">
+        <h2 className="text-sm font-medium text-gray-600 dark:text-gray-300">Memories</h2>
         <Button variant="ghost" size="icon" onClick={onClose} className="lg:hidden">
           <PanelLeft className="h-4 w-4" />
         </Button>
@@ -56,9 +56,9 @@ export const Sidebar = ({ isOpen, onClose, selectedMemoryId, onMemorySelect }: S
                 key={memory.id}
                 onClick={() => onMemorySelect(memory.id)}
                 className={cn(
-                  "w-full text-left rounded-lg border p-3 transition-colors",
+                  "w-full text-left rounded-lg p-3 transition-colors",
                   "hover:bg-gray-100 dark:hover:bg-gray-800",
-                  selectedMemoryId === memory.id && "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                  selectedMemoryId === memory.id && "bg-white shadow-sm dark:bg-gray-800"
                 )}
               >
                 <div className="flex items-center gap-3">

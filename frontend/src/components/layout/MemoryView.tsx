@@ -38,6 +38,25 @@ export const MemoryView = ({ memoryId, showMenu, onMenuClick }: MemoryViewProps)
 
     return (
       <div className="space-y-4">
+        {/* Top Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {showMenu && (
+              <Button variant="ghost" size="icon" onClick={onMenuClick}>
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         {/* Memory Type Indicator */}
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <span className="rounded-full bg-gray-100 px-2 py-1 dark:bg-gray-800">
@@ -53,14 +72,14 @@ export const MemoryView = ({ memoryId, showMenu, onMenuClick }: MemoryViewProps)
             href={memory.content}
             target="_blank"
             rel="noopener noreferrer"
-            className="block rounded-lg border p-4 hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="block rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <div className="text-blue-500 hover:underline break-all">
               {memory.content}
             </div>
           </a>
         ) : memory.type === 'image' ? (
-          <div className="rounded-lg border p-1">
+          <div className="rounded-lg p-1">
             <img
               src={memory.content}
               alt="Memory"
@@ -92,28 +111,6 @@ export const MemoryView = ({ memoryId, showMenu, onMenuClick }: MemoryViewProps)
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b bg-white px-4 dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex items-center gap-2">
-          {showMenu && (
-            <Button variant="ghost" size="icon" onClick={onMenuClick}>
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
-          <h1 className="text-lg font-semibold">Memory Details</h1>
-        </div>
-        {memory && (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </header>
-
       {/* Content */}
       <div className="flex-1 overflow-auto">
         <div className="container max-w-4xl mx-auto p-6">

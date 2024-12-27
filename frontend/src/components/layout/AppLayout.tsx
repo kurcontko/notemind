@@ -28,10 +28,7 @@ const AppLayout: FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className={cn(
-        "flex-1 h-full relative",
-        "lg:pl-0" // Remove left padding on larger screens
-      )}>
+      <main className="flex-1 h-full relative">
         {/* Memory View */}
         <div className="h-full overflow-hidden">
           <MemoryView
