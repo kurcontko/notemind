@@ -8,6 +8,7 @@ uvicorn
 azure-cosmos
 azure-storage-blob
 azure-identity
+azure-search-documents
 
 gremlinpython
 
@@ -23,3 +24,4 @@ langchain-openai
 python-dotenv
 
 markdownify
+tiktoken
