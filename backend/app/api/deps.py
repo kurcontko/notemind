@@ -5,7 +5,8 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings, AzureChatOpenAI, Azur
 
 from ..core.config import settings
 from ..loaders.note_loader import NotesLoader
-from ..services.db.notes_db_graph import CosmosNotesGraphService
+from ..services.db.cosmos_gremlin_graph import CosmosNotesGraphService
+from ..services.db.cosmos_db import CosmosDBNotesService
 
 
 def get_notes_loader() -> NotesLoader:
@@ -42,9 +43,9 @@ def get_notes_loader() -> NotesLoader:
     loader = NotesLoader(
         llm=llm,
         embeddings=embeddings,
-        storage_endpoint=settings.AZURE_STORAGE_ACCOUNT,
+        storage_account=settings.AZURE_STORAGE_ACCOUNT,
         storage_key=settings.AZURE_STORAGE_ACCESS_KEY,
-        storage_container=settings.AZURE_STORAGE_CONTAINER
+        container_name=settings.AZURE_STORAGE_CONTAINER
     )
     
     return loader
@@ -52,11 +53,11 @@ def get_notes_loader() -> NotesLoader:
 
 def get_note_service() -> CosmosNotesGraphService:
     """Initialize and return CosmosNotesGraphService with configured dependencies"""
-    return CosmosNotesGraphService(
+    return CosmosDBNotesService(
         endpoint=settings.AZURE_COSMOS_URI,
-        key=settings.AZURE_COSMOS_KEY,
-        database=settings.AZURE_COSMOS_DATABASE,
-        container=settings.AZURE_COSMOS_CONTAINER
+        database_name=settings.AZURE_COSMOS_DATABASE,
+        container_name=settings.AZURE_COSMOS_CONTAINER,
+        credential=settings.AZURE_COSMOS_KEY
     )
 
 

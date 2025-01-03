@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     AZURE_STORAGE_ACCESS_KEY: str = os.getenv("AZURE_STORAGE_ACCESS_KEY")
     AZURE_STORAGE_CONTAINER: str = os.getenv("AZURE_STORAGE_CONTAINER", "notes-media")
     
+    # Azure AI Search
+    AZURE_SEARCH_ENDPOINT: str = os.getenv("AZURE_SEARCH_ENDPOINT", "")
+    AZURE_SEARCH_API_KEY: str = os.getenv("AZURE_SEARCH_ADMIN_KEY", "")
+    AZURE_SEARCH_INDEX: str = os.getenv("AZURE_SEARCH_INDEX", "notes")
+    
     # Azure OpenAI 
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
