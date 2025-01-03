@@ -7,6 +7,7 @@ from gremlin_python.driver import client, serializer
 from gremlin_python.driver.protocol import GremlinServerError
 from gremlin_python.process.graph_traversal import __
 from gremlin_python.process.traversal import T
+from gremlin_python.driver.aiohttp.transport import AiohttpTransport
 
 from ...models.note import Note, NoteReference
 from ...models.content import ContentType, ContentUnion, TextContent, ImageContent, VideoContent, FileContent, LinkContent
@@ -22,7 +23,8 @@ class CosmosNotesGraphService(NotesDbService):
             'g',
             username=f"/dbs/{database}/colls/{container}",
             password=key,
-            message_serializer=serializer.GraphSONSerializersV2d0()
+            message_serializer=serializer.GraphSONSerializersV2d0(),
+            transport_factory=AiohttpTransport(call_from_event_loop=True)
         )
 
     async def __aenter__(self):
@@ -492,7 +494,8 @@ class CosmosNotesGraphService(NotesDbService):
         query += ".order().by('updated_at', decr)"
         query += f".range({offset}, {offset + limit})"
 
-        result = await self.client.submitAsync(query)
+        #result = await self._submit_query(query)
+        result = await self.client.submit_async(query)
         vertices = await result.all().result()
 
         notes = []
@@ -502,4 +505,26 @@ class CosmosNotesGraphService(NotesDbService):
                 notes.append(note)
 
         return notes
+    
+    async def _submit_query(self, query):
+        future = await self.client.submit_async(query)
+        #result = await asyncio.wrap_future(future)
+        return result 
+    
+    
+    async def _run_query(self, query):
+        """
+        Submit a Gremlin query using submitAsync() and integrate it with asyncio.
+        """
+        # submitAsync() immediately returns a concurrent.futures.Future
+        # which we can wrap with asyncio to avoid blocking
+        loop = asyncio.get_running_loop()
+
+        future = self.client.submitAsync(query)
+
+        # Wrap the future in an asyncio-compatible call
+        # so that we can await it without blocking the event loop
+        result_set = await loop.run_in_executor(None, future.result)
+        return result_set
+
 
