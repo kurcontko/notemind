@@ -20,9 +20,9 @@ class Note(BaseModel):
     
     categories: List[str] = Field(default_factory=list)
     title: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
+    tags: Optional[List[str]] = Field(default_factory=list)
     summary: Optional[str] = None
-    entities: Dict[str, str] = Field(default_factory=dict)
+    entities: Optional[Dict[str, str]] = Field(default_factory=dict)
 
     # Vector or AI search embedding for the entire note or summary
     embedding: Optional[List[float]] = None
@@ -43,26 +43,26 @@ class Note(BaseModel):
     
     def add_file_content(self, content: FileContent) -> 'Note':
         self.content_map[content.content_id] = content
-        md = self.markdown
+        md = self.content
         md += "\n---"
         if content.storage_url:
             md += f"\n![{content.content_id}]({content.storage_url})"
         if content.content:
             md += f"\n{content.content}"
         md += "\n---"
-        self.markdown = md
+        self.content = md
         return self
     
     def add_content(self, content: Union[BaseContent, FileContent]) -> 'Note':
         if isinstance(content, FileContent):
             return self.add_file_content(content)
-        md = self.markdown
+        md = self.content
         md += "\n\n"
         if content.preview:
             md += f"\n{content.preview}"
         if content.content:
             md += f"\n{content.content}"
-        self.markdown = md
+        self.content = md
         return self
     
     def to_frontend(self) -> 'FrontendNote':
