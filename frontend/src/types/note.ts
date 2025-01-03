@@ -21,7 +21,7 @@ export interface Note {
     updated_at: string;
     user_id?: string;
     categories: string[];
-    content?: string;
+    content: string;
     entities: Record<string, string>;
     // embedding?: number[];
     linked_notes?: NoteReference[];
