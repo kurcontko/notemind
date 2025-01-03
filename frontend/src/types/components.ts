@@ -2,17 +2,17 @@
 export interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    selectedMemoryId: string | null;
-    onMemorySelect: (id: string) => void;
+    selectedNoteId: string | null;
+    onNoteSelect: (id: string) => void;
   }
   
-  export interface MemoryViewProps {
-    memoryId: string | null;
+  export interface NoteViewProps {
+    noteId: string | null;
     onMenuClick: () => void;
     showMenu: boolean;
   }
   
   export interface CommandPaletteProps {
-    onMemoryCreate: () => void;
-    onMemorySelect: (id: string) => void;
+    onNoteCreate: () => void;
+    onNoteSelect: (id: string) => void;
   }

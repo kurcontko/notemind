@@ -1,17 +1,19 @@
 import React from 'react';
 import type { FC } from 'react';
 import { Sidebar } from './Sidebar';
-import { MemoryView } from './MemoryView';
-import { MemoryInput } from './MemoryInput';
+import { NoteView } from './NoteView';
+import { NoteInput } from './NoteInput';
 import { cn } from '@/lib/utils';
+import { noteService } from '@/services/noteService';
 
 const AppLayout: FC = () => {
-  const [selectedMemoryId, setSelectedMemoryId] = React.useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = React.useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = React.useState<boolean>(true);
 
-  const handleMemorySubmit = async (content: string, files?: File[]) => {
+  const handleNoteSubmit = async (content: string, files?: File[]) => {
     // Handle the memory creation here
-    console.log('Creating memory:', { content, files });
+    console.log('Creating note:', { content, files });
+    await noteService.create(content, files);
   };
 
   return (
@@ -20,8 +22,8 @@ const AppLayout: FC = () => {
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        selectedMemoryId={selectedMemoryId}
-        onMemorySelect={setSelectedMemoryId}
+        selectedNoteId={selectedNoteId}
+        onNoteSelect={setSelectedNoteId}
       />
 
       {/* Mobile Overlay */}
@@ -36,15 +38,15 @@ const AppLayout: FC = () => {
       <main className="flex-1 h-full relative flex flex-col">
         <div className={cn(
           "flex-1 flex flex-col",
-          !selectedMemoryId && "items-center justify-center"
+          !selectedNoteId && "items-center justify-center"
         )}>
           {/* Memory View */}
           <div className={cn(
             "w-full",
-            selectedMemoryId ? "flex-1" : "hidden"
+            selectedNoteId ? "flex-1" : "hidden"
           )}>
-            <MemoryView
-              memoryId={selectedMemoryId}
+            <NoteView
+              noteId={selectedNoteId}
               onMenuClick={() => setSidebarOpen(true)}
               showMenu={!sidebarOpen}
             />
@@ -53,9 +55,9 @@ const AppLayout: FC = () => {
           {/* Memory Input */}
           <div className={cn(
             "w-full bg-background dark:bg-foreground",
-            selectedMemoryId ? "fixed bottom-0 left-0 right-0 shadow-lg" : ""
+            selectedNoteId ? "fixed bottom-0 left-0 right-0 shadow-lg" : ""
           )}>
-            <MemoryInput onSubmit={handleMemorySubmit} />
+            <NoteInput onSubmit={handleNoteSubmit} />
           </div>
         </div>
       </main>

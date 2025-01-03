@@ -8,7 +8,7 @@ interface MemoryInputProps {
   onSubmit: (content: string, files?: File[]) => Promise<void>;
 }
 
-export const MemoryInput = ({ onSubmit }: MemoryInputProps) => {
+export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
   const [content, setContent] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -72,7 +72,8 @@ export const MemoryInput = ({ onSubmit }: MemoryInputProps) => {
       setFiles([]);
       setIsExpanded(false);
     } catch (error) {
-      console.error('Error submitting memory:', error);
+      console.error('Error creating note:', error);
+      // Add error notification here
     } finally {
       setIsSubmitting(false);
     }

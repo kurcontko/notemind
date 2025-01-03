@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { memoryService } from '@/services/memoryService';
-import { useDebounce } from './useDebounce';
+import { noteService } from '@/services/noteService';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export function useSearch() {
   const [query, setQuery] = useState('');
@@ -9,7 +9,7 @@ export function useSearch() {
 
   const { data: results, isLoading } = useQuery({
     queryKey: ['search', debouncedQuery],
-    queryFn: () => memoryService.search(debouncedQuery),
+    queryFn: () => noteService.search({ query: debouncedQuery }),
     enabled: debouncedQuery.length > 0,
   });
 
