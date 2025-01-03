@@ -32,9 +32,9 @@ class FileContent(BaseContent):
     type: ContentType = Field(default=ContentType.FILE)
     storage_url: str
     storage_path: str
-    original_filename: str
-    mime_type: str
-    size_bytes: int
+    original_filename: Optional[str] = None
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
     file_hash: Optional[str] = None
 
 
@@ -80,6 +80,21 @@ class AudioContent(FileContent):
     sample_rate: Optional[int]
     bit_rate: Optional[int]
     channels: Optional[int]
+
+
+CONTENT_CLASS_MAP = {
+    ContentType.FILE: FileContent,
+    ContentType.TEXT: TextContent,
+    ContentType.LINK: LinkContent,
+    ContentType.IMAGE: ImageContent,
+    ContentType.VIDEO: VideoContent,
+    ContentType.AUDIO: AudioContent
+}
+
+def parse_content(data: Dict[str, Any]) -> FileContent:
+    """Parse raw dictionary into appropriate content type"""
+    cls = CONTENT_CLASS_MAP.get(ContentType(data["type"]), FileContent)
+    return cls(**data)
 
 
 ContentUnion = Union[
