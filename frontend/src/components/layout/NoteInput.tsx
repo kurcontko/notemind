@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Plus } from 'lucide-react';
+import { Paperclip, Plus, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MemoryInputProps {
@@ -13,6 +13,7 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sparklesEnabled, setSparklesEnabled] = useState(true);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -90,6 +91,13 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
   };
 
   /**
+   * Sparkles button handler
+   */
+  const handleSparklesClick = () => {
+    setSparklesEnabled(prev => !prev);
+  };
+
+  /**
    * Keyboard submission (Enter = submit, Shift+Enter = new line)
    */
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -139,38 +147,53 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
           onKeyDown={handleKeyDown}
           placeholder="Type a note, drop files, or paste links..."
           className={cn(
-            'resize-none border-0 bg-transparent focus-visible:ring-0 w-full',
+            'resize-none border-0 bg-transparent focus-visible:ring-0 w-full shadow-none',
             'min-h-[24px] transition-all duration-200 overflow-hidden px-3 pt-3',
-            'focus:shadow-none' // Add this to remove focus shadow
+            'focus:shadow-none'
           )}
-          style={{ height: '24px' }} // Initial smaller height
+          style={{ height: '24px' }}
         />
 
-        {/* Bottom row with action buttons */}
-        <div className="mt-2 flex items-center justify-end w-full px-2 pb-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            asChild
-          >
-            <label>
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              <Paperclip className="h-4 w-4" />
-            </label>
-          </Button>
+        <div className="mt-2 flex items-center justify-between w-full px-2">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              asChild
+            >
+              <label>
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+                <Paperclip className="h-4 w-4" />
+              </label>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSparklesClick}
+              className={cn(
+                "transition-colors -ml-1",
+                sparklesEnabled 
+                  ? "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300" 
+                  : "text-gray-400 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-500"
+              )}
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+          </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={handleSubmit}
             disabled={isSubmitting || (!content.trim() && files.length === 0)}
-            className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <Plus className="h-4 w-4" />
           </Button>
