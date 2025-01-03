@@ -42,6 +42,7 @@ from langchain_core.runnables import Runnable
 from azure.storage.blob.aio import BlobServiceClient
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+import tiktoken
 
 from ..models.content import ContentType, ContentUnion, TextContent, ImageContent, VideoContent, FileContent, LinkContent
 from ..models.note import Note
@@ -59,7 +60,7 @@ class NotesLoader:
         self,
         llm: BaseLanguageModel,
         embeddings: Embeddings,
-        storage_endpoint: str,
+        storage_account: str,
         storage_key: str,
         container_name: str
     ):
@@ -67,6 +68,7 @@ class NotesLoader:
         self.embeddings = embeddings
         
         # Add DI for Azure Blob Storage
+        storage_endpoint = f"https://{storage_account}.blob.core.windows.net"
         self.blob_service = BlobServiceClient(account_url=storage_endpoint, credential=storage_key)
         self.container_name = container_name
         
@@ -75,12 +77,12 @@ class NotesLoader:
         
         # Initialize processors
         self.processors = {
-            #ContentType.AUDIO: AudioProcessor(self.blob_service, container_name, self.chains),
-            ContentType.TEXT: TextProcessor(self.blob_service, container_name, self.chains),
-            ContentType.IMAGE: ImageProcessor(self.blob_service, container_name, self.chains),
-            ContentType.VIDEO: VideoProcessor(self.blob_service, container_name, self.chains),
-            ContentType.DOCUMENT: DocumentProcessor(self.blob_service, container_name, self.chains),
-            ContentType.LINK: LinkProcessor(self.blob_service, container_name, self.chains)
+            #ContentType.AUDIO: AudioProcessor(self.blob_service, container_name),
+            ContentType.TEXT: TextProcessor(self.blob_service, container_name),
+            ContentType.IMAGE: ImageProcessor(self.blob_service, container_name),
+            ContentType.VIDEO: VideoProcessor(self.blob_service, container_name),
+            ContentType.DOCUMENT: DocumentProcessor(self.blob_service, container_name),
+            ContentType.LINK: LinkProcessor(self.blob_service, container_name)
         }
 
     def _detect_content_type(self, file: UploadFile) -> ContentType:
@@ -106,31 +108,22 @@ class NotesLoader:
 
     async def _generate_metadata(
         self,
-        contents: List[ContentUnion]
+        content: str,
+        context = ""
     ) -> tuple[str, str, List[str], Dict[str, str]]:
         """Generate all metadata using LangChain chains"""
-        text_content = []
-        for content in contents:
-            if content.type == ContentType.TEXT:
-                text_content.append(content.text)
-            elif content.preview:
-                text_content.append(content.preview)
-        
-        combined_text = " ".join(text_content)
-        context = ""
-         
-        if not combined_text:
+        if not content:
             raise ValueError("No content to process")
         
         # Run all chains in parallel
         title, summary, tags, entities = await asyncio.gather(
-            self.chains.title_chain.ainvoke({"content": combined_text}),
+            self.chains.title_chain.ainvoke({"content": content}),
             self.chains.summary_chain.ainvoke({
-                "content": combined_text,
+                "content": content,
                 "context": context
             }),
-            self.chains.tags_chain.ainvoke({"content": combined_text}),
-            self.chains.entities_chain.ainvoke({"content": combined_text})
+            self.chains.tags_chain.ainvoke({"content": content}),
+            self.chains.entities_chain.ainvoke({"content": content})
         )
         
         return title, summary, tags, entities
@@ -145,46 +138,46 @@ class NotesLoader:
         if not text_input and not files:
             raise ValueError("At least one input source required")
 
-        contents: List[ContentUnion] = []
-        
-        # Process text input
+        link_contents = []
+        leftover_text = None
         if text_input:
-            # Extract URLs
             words = text_input.split()
-            urls = [word for word in words if self._is_valid_url(word)]
-            
-            # Process URLs
-            for url in urls:
-                link_content = await self.processors[ContentType.LINK].process(url)
-                contents.append(link_content)
-            
-            # Process remaining text
-            remaining_text = ' '.join(word for word in words if word not in urls)
-            if remaining_text.strip():
-                text_content = await self.processors[ContentType.TEXT].process(remaining_text)
-                contents.append(text_content)
-        
-        # Process files
+            urls = [w for w in words if self._is_valid_url(w)]
+            # changed code - gather link processing tasks
+            link_tasks = [self.processors[ContentType.LINK].process(url) for url in urls]
+            link_contents = await asyncio.gather(*link_tasks)
+            leftover_text = ' '.join(w for w in words if w not in urls)
+
+        processed_files = []
         if files:
             processed_files = await self.process_files(files)
-            contents.extend(processed_files)
-        
-        # Generate metadata using LangChain chains
-        title, summary, tags, entities = await self._generate_metadata(contents)
-        
-        # Generate embedding for the summary
-        embedding = await self.embeddings.aembed_query(summary)
-        
-        # Create note
+
         note = Note(
             user_id=user_id,
-            contents=contents,
-            title=title,
-            summary=summary,
-            tags=tags,
-            entities=entities,
-            embedding=embedding
+            content=leftover_text
         )
+        for content in link_contents:
+            note.add_content(content)
+        for content in processed_files:
+            note.add_content(content)
+
+        # Generate metadata and embeddings with concurrency
+        title, summary, tags, entities = await self._generate_metadata(note.content)
+        
+        # Generate embedding for the summary
+        encoding = tiktoken.get_encoding("cl100k_base")
+        token_count = len(encoding.encode(note.content))
+        if token_count > 2048: # Limit 
+            embedding = await self.embeddings.aembed_query(summary)
+        else:
+            embedding = await self.embeddings.aembed_query(note.content)
+        
+        # Create note
+        note.title = title
+        note.summary = summary
+        note.tags = tags
+        note.entities = entities
+        note.embedding = embedding
         
         return note
     
@@ -203,5 +196,6 @@ class NotesLoader:
         contents = await asyncio.gather(*tasks, return_exceptions=False)
         
         return contents
-        
-    
+
+
+

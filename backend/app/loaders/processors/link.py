@@ -11,6 +11,7 @@ from fastapi import UploadFile
 from llama_index.core.schema import Document
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+from azure.storage.blob.aio import BlobServiceClient
 
 from ...models.content import ContentType, ContentUnion, TextContent, ImageContent, VideoContent, FileContent, LinkContent
 from ...models.note import Note
@@ -18,8 +19,9 @@ from .base import ContentProcessor
 
 
 class LinkProcessor(ContentProcessor):
-    def __init__(self):
+    def __init__(self, blob_service: BlobServiceClient, container_name: str):
         self._website_extractor = {}  # Your website-specific extractors
+        super().__init__(blob_service, container_name)
 
     def _extract_content(
         self,
@@ -71,9 +73,10 @@ class LinkProcessor(ContentProcessor):
         markdown_content = self.html_to_markdown(str(soup))
         
         # Save original HTML to blob storage
-        storage_url = await self._save_to_blob(
-            html_content.encode('utf-8'),
-            f"{hashlib.md5(url.encode()).hexdigest()}.html"
+        blob = await self._save_to_blob(
+            content=html_content.encode('utf-8'),
+            filename=f"{hashlib.md5(url.encode()).hexdigest()}.html",
+            mime="text/html"
         )
         
         # Create preview
@@ -81,7 +84,11 @@ class LinkProcessor(ContentProcessor):
         
         return LinkContent(
             url=url,
-            storage_url=storage_url,
+            storage_url=blob.get("url"),
+            storage_path=blob.get("path"),
+            mime_type="text/html",
+            size_bytes=blob.get("size"),
+            original_filename=blob.get("path"),
             preview=preview,
             content=markdown_content
         )
