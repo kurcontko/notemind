@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Paperclip, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MemoryInputProps {
@@ -13,24 +13,29 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea
+  /**
+   * Auto-resize textarea up to 300px
+   */
   const adjustTextareaHeight = () => {
+    if (!textareaRef.current) return;
     const textarea = textareaRef.current;
-    if (!textarea) return;
 
     textarea.style.height = 'auto';
-    const maxHeight = isExpanded ? 300 : 100;
-    const scrollHeight = Math.min(textarea.scrollHeight, maxHeight);
+    // Fix max height at 300px
+    const scrollHeight = Math.min(textarea.scrollHeight, 300);
     textarea.style.height = `${scrollHeight}px`;
   };
 
   useEffect(() => {
     adjustTextareaHeight();
-  }, [content, isExpanded]);
+  }, [content]);
 
+  /**
+   * Drag & drop handlers
+   */
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -51,10 +56,13 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
     // Check if the dropped item is a URL
     const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
     if (url && url.startsWith('http')) {
-      setContent(prev => prev + (prev ? '\n' : '') + url);
+      setContent(prev => (prev ? `${prev}\n${url}` : url));
     }
   }, []);
 
+  /**
+   * File upload handler
+   */
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
@@ -62,23 +70,28 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
     }
   }, []);
 
+  /**
+   * Submit handler
+   */
   const handleSubmit = async () => {
     if (!content.trim() && files.length === 0) return;
-    
+
     setIsSubmitting(true);
     try {
       await onSubmit(content, files);
       setContent('');
       setFiles([]);
-      setIsExpanded(false);
     } catch (error) {
       console.error('Error creating note:', error);
-      // Add error notification here
+      // Add error notification here if needed
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /**
+   * Keyboard submission (Enter = submit, Shift+Enter = new line)
+   */
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -86,24 +99,20 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
     }
   };
 
-  const toggleExpand = () => {
-    setIsExpanded(!isExpanded);
-  };
-
   return (
     <div className="w-full max-w-2xl mx-auto px-4 pb-4">
-      <div 
+      <div
         className={cn(
-          "rounded-lg border bg-white dark:bg-gray-800 shadow-sm",
-          isDragging && "border-blue-500 bg-blue-50 dark:bg-blue-900/20",
+          'flex flex-col w-full border border-gray-300 dark:border-gray-700 rounded-md',
+          isDragging && 'bg-blue-50 dark:bg-blue-900/20'
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* File Preview */}
+        {/* File Preview (above the input) */}
         {files.length > 0 && (
-          <div className="flex flex-wrap gap-2 border-b p-2">
+          <div className="flex flex-wrap gap-2 p-2">
             {files.map((file, index) => (
               <div
                 key={index}
@@ -122,12 +131,27 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
           </div>
         )}
 
-        {/* Input Area */}
-        <div className="flex items-end gap-2 py-1.5 px-3">
+        {/* Textarea (occupies full width, no border) */}
+        <Textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a note, drop files, or paste links..."
+          className={cn(
+            'resize-none border-0 bg-transparent focus-visible:ring-0 w-full',
+            'min-h-[24px] transition-all duration-200 overflow-hidden px-3 pt-3',
+            'focus:shadow-none' // Add this to remove focus shadow
+          )}
+          style={{ height: '24px' }} // Initial smaller height
+        />
+
+        {/* Bottom row with action buttons */}
+        <div className="mt-2 flex items-center justify-end w-full px-2 pb-2">
           <Button
             variant="ghost"
             size="icon"
-            className="self-end text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             asChild
           >
             <label>
@@ -141,41 +165,15 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
             </label>
           </Button>
 
-          <div className="flex-1">
-            <Textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a note, drop files, or paste links..."
-              className={cn(
-                "resize-none border-0 bg-transparent px-0 py-1 focus-visible:ring-0",
-                "min-h-[20px] transition-all duration-200 overflow-hidden",
-                isExpanded ? "min-h-[100px]" : "max-h-[500px]"
-              )}
-              style={{ height: '24px' }} // Initial height
-            />
-          </div>
-
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleExpand}
-              className="self-end text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSubmit}
-              disabled={isSubmitting || (!content.trim() && files.length === 0)}
-              className="self-end text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSubmit}
+            disabled={isSubmitting || (!content.trim() && files.length === 0)}
+            className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
