@@ -5,10 +5,11 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
-import { Menu, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Menu, Pencil, Trash2, Loader2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   MDXEditor,
+  MDXEditorMethods,
   headingsPlugin,
   listsPlugin,
   quotePlugin,
@@ -153,20 +154,22 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
           <h1 className="text-xl font-bold truncate">{note?.title}</h1>
         )}
       </div>
-      <div className="flex items-center gap-2 ml-4">
-        {tab === 'edit' ? (
-          <Button variant="ghost" onClick={handleSave}>
-            Save
+      {note && (
+        <div className="flex items-center gap-2 ml-4">
+          {tab === 'edit' ? (
+            <Button variant="ghost" onClick={handleSave}>
+              Save
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={() => setTab('edit')}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+            <Trash2 className="h-4 w-4" />
           </Button>
-        ) : (
-          <Button variant="ghost" onClick={() => setTab('edit')}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-        )}
-        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 
