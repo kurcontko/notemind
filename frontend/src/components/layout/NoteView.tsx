@@ -133,20 +133,39 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     </div>
   );
 
-  const renderTitleSection = () => (
-    <div className="pb-4">
-      {tab === 'edit' ? (
-        <input
-          type="text"
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          className="w-full text-2xl font-bold bg-transparent border-gray-300 focus:outline-none pb-2 mb-2"
-        />
-      ) : (
-        <h1 className="text-2xl font-bold">{note?.title}</h1>
-      )}
-      <div className="text-sm text-gray-500">
-        Last modified {formatDistanceToNow(new Date(note?.updated_at || ''))} ago
+  const renderHeader = () => (
+    <div className="flex items-center justify-between w-full">
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        {showMenu && (
+          <Button variant="ghost" size="icon" onClick={onMenuClick}>
+            <Menu className="h-4 w-4" />
+          </Button>
+        )}
+        {tab === 'edit' ? (
+          <input
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className="flex-1 text-xl font-bold bg-transparent focus:outline-none min-w-0"
+            placeholder="Note title"
+          />
+        ) : (
+          <h1 className="text-xl font-bold truncate">{note?.title}</h1>
+        )}
+      </div>
+      <div className="flex items-center gap-2 ml-4">
+        {tab === 'edit' ? (
+          <Button variant="ghost" onClick={handleSave}>
+            Save
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={() => setTab('edit')}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
@@ -234,7 +253,7 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
 
     return (
       <div className="space-y-4">
-        {renderTitleSection()}
+        {/* {renderTitleSection()} */}
         {renderSummary()}
         {tab === 'preview' ? renderPreview() : renderEditor()}
         {renderTagSection()}
@@ -249,29 +268,7 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
           <Progress value={progress} className="absolute top-0 left-0 right-0 h-1 rounded-none" />
         )}
         <div className="max-w-3xl mx-auto px-6 py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {showMenu && (
-                <Button variant="ghost" size="icon" onClick={onMenuClick}>
-                  <Menu className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {tab === 'edit' ? (
-                <Button variant="ghost" onClick={handleSave}>
-                  Save
-                </Button>
-              ) : (
-                <Button variant="ghost" onClick={() => setTab('edit')}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          {renderHeader()}
         </div>
       </div>
 
