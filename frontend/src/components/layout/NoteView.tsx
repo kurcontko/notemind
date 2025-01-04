@@ -5,23 +5,33 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
-import SimpleMDE from 'react-simplemde-editor';
-import 'easymde/dist/easymde.min.css';
-import { noteService } from '@/services/noteService';
-import { Menu, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Menu, Pencil, Trash2, Loader2, Bold, Italic, Code, List, ListOrdered } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import clsx from 'clsx';
+import {
+  MDXEditor,
+  headingsPlugin,
+  listsPlugin,
+  quotePlugin,
+  thematicBreakPlugin,
+  markdownShortcutPlugin,
+} from '@mdxeditor/editor';
+import { noteService } from '@/services/noteService';
+import TagManagement from './TagManagement';
+
+import '@mdxeditor/editor/style.css';
 
 interface NoteViewProps {
   noteId: string | null;
   showMenu: boolean;
   onMenuClick: () => void;
+  onEditStateChange: (isEditing: boolean) => void;
 }
 
-export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
+export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: NoteViewProps) => {
   const [tab, setTab] = React.useState<'preview' | 'edit'>('preview');
   const [editText, setEditText] = React.useState('');
   const [editTitle, setEditTitle] = React.useState('');
+  const editorRef = React.useRef<MDXEditorMethods>(null);
 
   const { data: note, isLoading, refetch } = useQuery({
     queryKey: ['note', noteId],
@@ -37,13 +47,16 @@ export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
     }
   }, [note]);
 
+  React.useEffect(() => {
+    onEditStateChange(tab === 'edit');
+  }, [tab, onEditStateChange]);
+
   const handleSave = async () => {
     if (!noteId) return;
     await noteService.update(noteId, { 
       content: editText,
       title: editTitle,
     });
-    // refetch to get updated data
     refetch();
     setTab('preview');
   };
@@ -58,35 +71,6 @@ export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
     <div className="flex h-96 flex-col items-center justify-center text-gray-500">
       <p className="text-lg">Select a note from the sidebar</p>
       <p className="text-sm">or press ⌘K to create a new one</p>
-    </div>
-  );
-
-  const renderTabs = () => (
-    <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
-      <nav className="flex gap-4">
-        <button
-          onClick={() => setTab('preview')}
-          className={clsx(
-            'p-2 pb-1 border-b-2 transition-colors',
-            tab === 'preview'
-              ? 'border-blue-500 text-blue-500'
-              : 'border-transparent hover:text-blue-500'
-          )}
-        >
-          Preview
-        </button>
-        <button
-          onClick={() => setTab('edit')}
-          className={clsx(
-            'p-2 pb-1 border-b-2 transition-colors',
-            tab === 'edit'
-              ? 'border-blue-500 text-blue-500'
-              : 'border-transparent hover:text-blue-500'
-          )}
-        >
-          Edit
-        </button>
-      </nav>
     </div>
   );
 
@@ -175,31 +159,21 @@ export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
     );
   };
 
-  const editorOptions = React.useMemo(() => ({
-    spellChecker: false,
-    autofocus: true,
-    status: false,
-    toolbar: [
-      'bold', 'italic', 'heading', '|',
-      'quote', 'unordered-list', 'ordered-list', '|',
-      'link', 'image', 'code', '|',
-      'preview', 'side-by-side', 'fullscreen'
-    ],
-    minHeight: '300px',
-    maxHeight: '600px',
-    sideBySideFullscreen: false
-  }), []);
-
-  const renderEditor = React.useCallback(() => (
-    <div className="editor-wrapper relative [&_.EasyMDEContainer]:!static [&_.editor-preview-side]:!w-[50%] [&_.editor-preview-side]:!static">
-      <SimpleMDE
-        value={editText}
+  const renderEditor = () => (
+    <div className="editor-wrapper prose prose-gray dark:prose-invert max-w-none">
+      <MDXEditor
+        markdown={editText}
         onChange={setEditText}
-        options={editorOptions}
-        key={noteId} // This ensures editor state resets when switching notes
+        plugins={[
+          headingsPlugin(),
+          listsPlugin(),
+          quotePlugin(),
+          thematicBreakPlugin(),
+          markdownShortcutPlugin(),
+        ]}
       />
     </div>
-  ), [editText, noteId, editorOptions]);
+  );
 
   const renderContent = () => {
     if (isLoading) return renderLoading();
@@ -217,8 +191,7 @@ export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Sticky header */}
-      <div className="sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+      <div className="sticky top-0 bg-background/80 backdrop-blur-sm z-10 border-b">
         <div className="max-w-3xl mx-auto px-6 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -243,13 +216,11 @@ export const NoteView = ({ noteId, showMenu, onMenuClick }: NoteViewProps) => {
               </Button>
             </div>
           </div>
-          {/* {note} && renderTabs()} */}
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-600">
-        <div className="max-w-3xl mx-auto px-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-6 py-4">
           {renderContent()}
         </div>
       </div>
