@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotes } from '@/hooks/useNotes';
@@ -15,42 +15,55 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: SidebarProps) => {
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const { notes, isLoading, fetchMoreNotes } = useNotes();
+  const {
+    notes,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useNotes();
   const { query, results, isLoading: isSearchLoading, handleSearch } = useSearch();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  
+  // Create an intersection observer ref
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  // Create a ref for the last element
+  const lastElementRef = useRef<HTMLDivElement | null>(null);
 
-  const ITEMS_PER_PAGE = 20;
-  const SCROLL_THRESHOLD = 100; // pixels from bottom to trigger load
+  const displayNotes = isSearchVisible && query.length > 0 ? results ?? [] : notes;
 
-  const loadMoreNotes = useCallback(async () => {
-    if (isLoadingMore || !hasMore || isSearchVisible) return;
+  // Setup intersection observer
+  useEffect(() => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
 
-    setIsLoadingMore(true);
-    try {
-      const newNotes = await fetchMoreNotes(page * ITEMS_PER_PAGE);
-      if (newNotes.length < ITEMS_PER_PAGE) {
-        setHasMore(false);
-      } else {
-        setPage(prev => prev + 1);
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1,
       }
-    } catch (error) {
-      console.error('Error loading more notes:', error);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [page, hasMore, isLoadingMore, fetchMoreNotes, isSearchVisible]);
+    );
 
-  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLDivElement;
-    const { scrollTop, scrollHeight, clientHeight } = target;
-
-    if (scrollHeight - (scrollTop + clientHeight) < SCROLL_THRESHOLD) {
-      loadMoreNotes();
+    // Observe last element
+    if (lastElementRef.current) {
+      observerRef.current.observe(lastElementRef.current);
     }
-  }, [loadMoreNotes]);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, displayNotes]);
 
   const toggleSearch = () => {
     setIsSearchVisible(!isSearchVisible);
@@ -58,12 +71,6 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
       handleSearch('');
     }
   };
-
-  // Reset pagination when search is toggled
-  useEffect(() => {
-    setPage(1);
-    setHasMore(true);
-  }, [isSearchVisible]);
 
   return (
     <aside
@@ -103,59 +110,63 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
       </div>
 
       {/* Note List */}
-      <ScrollArea className="flex-1 w-full" onScroll={handleScroll}>
+      <ScrollArea className="flex-1 w-full">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
           </div>
         ) : (
           <div className="px-2 py-1">
-            {notes?.map((note) => (
-              <button
+            {displayNotes?.map((note, index) => (
+              <div
                 key={note.note_id}
-                onClick={() => onNoteSelect(note.note_id)}
-                className={cn(
-                  "w-full text-left rounded-lg p-2 transition-colors mb-0.5 group",
-                  "hover:bg-gray-100 dark:hover:bg-gray-800",
-                  selectedNoteId === note.note_id && "bg-white shadow-sm dark:bg-gray-800"
-                )}
+                ref={index === displayNotes.length - 1 ? lastElementRef : null}
               >
-                <div className="flex w-full items-start space-x-2">
-                  <FileText className="h-4 w-4 flex-shrink-0 text-green-500 mt-1 opacity-75 group-hover:opacity-100" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[220px]">
-                      {note.title}
-                    </p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
-                    </p>
-                    <p className="text-xs italic text-gray-500 dark:text-gray-400 truncate mt-0.5 max-w-[220px]">
-                      {note.content}
-                    </p>
-                    {note.tags?.length > 0 && (
-                      <div className="mt-1 flex gap-1 items-center">
-                        <span className="flex gap-1 items-center max-w-[70%]">
-                          {note.tags.slice(0, 2).map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-flex rounded-full bg-gray-100/80 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800/50 dark:text-gray-300"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </span>
-                        {note.tags.length > 2 && (
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                            +{note.tags.length - 2}
+                <button
+                  onClick={() => onNoteSelect(note.note_id)}
+                  className={cn(
+                    "w-full text-left rounded-lg p-2 transition-colors mb-0.5 group",
+                    "hover:bg-gray-100 dark:hover:bg-gray-800",
+                    selectedNoteId === note.note_id && "bg-white shadow-sm dark:bg-gray-800"
+                  )}
+                >
+                  <div className="flex w-full items-start space-x-2">
+                    <FileText className="h-4 w-4 flex-shrink-0 text-green-500 mt-1 opacity-75 group-hover:opacity-100" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[220px]">
+                        {note.title}
+                      </p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
+                      </p>
+                      <p className="text-xs italic text-gray-500 dark:text-gray-400 truncate mt-0.5 max-w-[220px]">
+                        {note.content}
+                      </p>
+                      {note.tags?.length > 0 && (
+                        <div className="mt-1 flex gap-1 items-center">
+                          <span className="flex gap-1 items-center max-w-[70%]">
+                            {note.tags.slice(0, 2).map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex rounded-full bg-gray-100/80 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800/50 dark:text-gray-300"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
                           </span>
-                        )}
-                      </div>
-                    )}
+                          {note.tags.length > 2 && (
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              +{note.tags.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              </div>
             ))}
-            {isLoadingMore && (
+            {isFetchingNextPage && (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>

@@ -22,18 +22,19 @@ export const useNotes = (searchQuery?: string) => {
   } = useInfiniteQuery({
     queryKey: ['notes', { searchQuery }],
     queryFn: async ({ pageParam = 0 }) => {
+      console.log("Fetching notes with offset:", pageParam);
       const notes = await noteService.getAll({
         offset: pageParam,
         limit: PAGE_SIZE,
         searchQuery
       });
-      return notes;
+      return { notes, nextPage: pageParam + PAGE_SIZE };
     },
-    getNextPageParam: (lastPage, allPages) => {
-      if (lastPage.length < PAGE_SIZE) return undefined;
-      return allPages.length * PAGE_SIZE;
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      // Use the `nextPage` property from the returned data
+      return lastPage.notes.length === PAGE_SIZE ? lastPage.nextPage : undefined;
     },
-    initialPageParam: 0
   });
 
   const createMutation = useMutation({
@@ -45,18 +46,13 @@ export const useNotes = (searchQuery?: string) => {
   });
 
   // Flatten pages of notes into a single array
-  const notes = data?.pages.flat() ?? [];
-
-  const fetchMoreNotes = async (offset: number) => {
-    const result = await fetchNextPage();
-    return result.data?.pages.flat() ?? [];
-  };
+  const notes = data?.pages.flatMap((page) => page.notes) ?? [];
 
   return {
     notes,
-    createNote: (text?: string, files?: File[]) => 
+    createNote: (text?: string, files?: File[]) =>
       createMutation.mutateAsync({ text, files }),
-    fetchMoreNotes,
+    fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
