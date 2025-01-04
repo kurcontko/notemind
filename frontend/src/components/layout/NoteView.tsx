@@ -5,7 +5,15 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
-import { Menu, Pencil, Trash2, Loader2, X } from 'lucide-react';
+import {
+  Menu,
+  Pencil,
+  Trash2,
+  Loader2,
+  XCircle,
+  Sparkles,
+  Save,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   MDXEditor,
@@ -20,8 +28,15 @@ import { noteService } from '@/services/noteService';
 import TagManagement from './TagManagement';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 import '@mdxeditor/editor/style.css';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface NoteViewProps {
   noteId: string | null;
@@ -30,7 +45,12 @@ interface NoteViewProps {
   onEditStateChange: (isEditing: boolean) => void;
 }
 
-export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: NoteViewProps) => {
+export const NoteView = ({
+  noteId,
+  showMenu,
+  onMenuClick,
+  onEditStateChange,
+}: NoteViewProps) => {
   const [tab, setTab] = React.useState<'preview' | 'edit'>('preview');
   const [editText, setEditText] = React.useState('');
   const [editTitle, setEditTitle] = React.useState('');
@@ -40,6 +60,7 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
   const [progress, setProgress] = React.useState(0);
   const progressTimerRef = React.useRef<number>();
   const { toast } = useToast();
+  const [sparklesEnabled, setSparklesEnabled] = React.useState(true);
 
   const { data: note, isLoading, refetch } = useQuery({
     queryKey: ['note', noteId],
@@ -48,7 +69,6 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
   });
 
   React.useEffect(() => {
-    // Whenever note changes, reset edit fields
     if (note) {
       setEditText(note.content || '');
       setEditTitle(note.title || '');
@@ -64,9 +84,10 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     if (isSaving) {
       setProgress(0);
       progressTimerRef.current = window.setInterval(() => {
-        setProgress(prev => {
+        setProgress((prev) => {
           if (prev >= 90) {
-            if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+            if (progressTimerRef.current)
+              clearInterval(progressTimerRef.current);
             return 90;
           }
           return prev + 10;
@@ -85,18 +106,18 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     if (!noteId) return;
     setIsSaving(true);
     try {
-      await noteService.update(noteId, { 
+      await noteService.update(noteId, {
         content: editText,
         title: editTitle,
         tags: editTags,
       });
-      await new Promise(resolve => setTimeout(resolve, 500));
-      toast({ title: "Success", description: "Note saved", variant: "default" });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      toast({ title: 'Success', description: 'Note saved', variant: 'default' });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to save your note. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to save your note. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsSaving(false);
@@ -107,11 +128,9 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
 
   const handleTagsChange = async (newTags: string[]) => {
     if (tab === 'edit') {
-      // In edit mode, just update the local state
       setEditTags(newTags);
     } else {
-      // In preview mode, update directly through the API
-      if (noteId) {
+      if (noteId && note) {
         await noteService.update(noteId, {
           ...note,
           tags: newTags,
@@ -119,6 +138,13 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
         refetch();
       }
     }
+  };
+
+  const handleCloseEdit = () => {
+    setEditText(note?.content || '');
+    setEditTitle(note?.title || '');
+    setEditTags(note?.tags || []);
+    setTab('preview');
   };
 
   const renderLoading = () => (
@@ -155,20 +181,101 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
         )}
       </div>
       {note && (
-        <div className="flex items-center gap-2 ml-4">
-          {tab === 'edit' ? (
-            <Button variant="ghost" onClick={handleSave}>
-              Save
-            </Button>
-          ) : (
-            <Button variant="ghost" onClick={() => setTab('edit')}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <TooltipProvider delayDuration={200}>
+          <div className="flex items-center gap-1.5 ml-4">
+            {tab === 'edit' ? (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCloseEdit}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Close</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className={cn(
+                        isSaving ? 'bg-gray-200' 
+                        : 'bg-primary hover:bg-primary/80', // Use primary color
+                        'text-white'
+                      )}
+                    >
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Save Changes</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setSparklesEnabled(!sparklesEnabled)}
+                      className={cn(
+                        'transition-colors',
+                        sparklesEnabled
+                          ? 'text-primary hover:text-primary/80' 
+                          : 'text-gray-400 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-500'
+                      )}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{sparklesEnabled ? 'Disable' : 'Enable'} AI</p>
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setTab('edit')}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-red-500 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       )}
     </div>
   );
@@ -185,58 +292,57 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
   const renderTagSection = () => (
     <div className="py-4">
       <TagManagement
-        tags={tab === 'edit' ? editTags : (note?.tags || [])}
+        tags={tab === 'edit' ? editTags : note?.tags || []}
         onTagsChange={handleTagsChange}
         isEditing={tab === 'edit'}
       />
     </div>
   );
 
-  const renderPreview = () => {
-    return (
-      <div className="prose prose-gray dark:prose-invert max-w-none">
-        <ReactMarkdown
-          className="break-words"
-          remarkPlugins={[remarkGfm]}
-          components={{
-            code({ node, inline, className, children, style, ...props }) {
-              const match = /language-(\w+)/.exec(className || '');
-              return !inline && match ? (
-                <SyntaxHighlighter
-                  {...props}
-                  style={oneDark}
-                  language={match[1]}
-                  PreTag="div"
-                  customStyle={{
-                    margin: '1em 0',
-                    borderRadius: '0.375rem',
-                  }}
-                  codeTagProps={{
-                    style: {
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.875rem',
-                    },
-                  }}
-                >
-                  {String(children).replace(/\n$/, '')}
-                </SyntaxHighlighter>
-              ) : (
-                <code {...props} className={className}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {note?.content || ''}
-        </ReactMarkdown>
-      </div>
-    );
-  };
+  const renderPreview = () => (
+    <div className="prose prose-gray dark:prose-invert max-w-none">
+      <ReactMarkdown
+        className="break-words"
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline, className, children, style, ...props }) {
+            const match = /language-(\w+)/.exec(className || '');
+            return !inline && match ? (
+              <SyntaxHighlighter
+                {...props}
+                style={oneDark}
+                language={match[1]}
+                PreTag="div"
+                customStyle={{
+                  margin: '1em 0',
+                  borderRadius: '0.375rem',
+                }}
+                codeTagProps={{
+                  style: {
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.875rem',
+                  },
+                }}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            ) : (
+              <code {...props} className={className}>
+                {children}
+              </code>
+            );
+          },
+        }}
+      >
+        {note?.content || ''}
+      </ReactMarkdown>
+    </div>
+  );
 
   const renderEditor = () => (
     <div className="editor-wrapper prose prose-gray dark:prose-invert max-w-none">
       <MDXEditor
+        ref={editorRef}
         markdown={editText}
         onChange={setEditText}
         plugins={[
@@ -256,7 +362,6 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
 
     return (
       <div className="space-y-4">
-        {/* {renderTitleSection()} */}
         {renderSummary()}
         {tab === 'preview' ? renderPreview() : renderEditor()}
         {renderTagSection()}
@@ -268,13 +373,15 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     <div className="w-full h-full flex flex-col">
       <div className="sticky top-0 bg-background/80 backdrop-blur-sm z-10">
         {isSaving && (
-          <Progress value={progress} className="absolute top-0 left-0 right-0 h-1 rounded-none" />
+          <Progress
+            value={progress}
+            className="absolute top-0 left-0 right-0 h-1 rounded-none"
+          />
         )}
         <div className="max-w-3xl mx-auto px-6 py-2">
           {renderHeader()}
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-4">
           {renderContent()}
