@@ -1,11 +1,19 @@
 
-// frontend/src/services/noteService.ts
 import { api } from './api';
 import { Note } from '../types/note';
 
+interface GetNotesParams {
+  limit?: number;
+  offset?: number;
+  searchQuery?: string;
+}
+
 export const noteService = {
-  getAll: async () => {
-    const response = await api.get<Note[]>('/notes');
+  getAll: async ({ limit = 20, offset = 0, searchQuery }: GetNotesParams = {}) => {
+    const params: Record<string, any> = { limit, offset };
+    if (searchQuery) params.q = searchQuery;
+    
+    const response = await api.get<Note[]>('/notes', { params });
     return response.data;
   },
   
