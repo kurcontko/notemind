@@ -1,6 +1,5 @@
-
 import { api } from './api';
-import { Note } from '../types/note';
+import { Note, NoteUpdateData } from '../types/note';
 
 interface GetNotesParams {
   limit?: number;
@@ -25,11 +24,22 @@ export const noteService = {
     return response.data;
   },
   
-  update: async (id: string, note: Partial<Note>) => {
-    const response = await api.put<Note>(`/notes/${id}`, note);
+  update: async (id: string, data: NoteUpdateData, files?: File[]) => {
+    if (files && files.length > 0) {
+      const formData = new FormData();
+      formData.append('note_id', id);
+      formData.append('note', JSON.stringify(data));
+      files.forEach(f => formData.append('files', f));
+      const response = await api.put<Note>(`/notes/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    }
+    
+    const response = await api.put<Note>(`/notes/${id}`, data);
     return response.data;
   },
-  
+
   delete: async (id: string) => {
     await api.delete(`/notes/${id}`);
   },
@@ -47,5 +57,19 @@ export const noteService = {
   search: async (params: Record<string, any>) => {
     const response = await api.get<Note[]>('/search', { params });
     return response.data;
+  },
+
+  addFiles: async (noteId: string, files: File[]) => {
+    const formData = new FormData();
+    formData.append('note_id', noteId);
+    files.forEach(f => formData.append('files', f));
+    const response = await api.post<Note>(`/notes/${noteId}/files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  removeFile: async (noteId: string, fileId: string) => {
+    await api.delete(`/notes/${noteId}/files/${fileId}`);
   }
 };

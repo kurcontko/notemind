@@ -5,6 +5,14 @@ export interface NoteReference {
   metadata: Record<string, any>;
 }
 
+export interface NoteFile {
+  file_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url?: string;
+}
+
 export interface Note {
     note_id: string;
     title?: string;
@@ -25,5 +33,15 @@ export interface Note {
     entities: Record<string, string>;
     // embedding?: number[];
     linked_notes?: NoteReference[];
+    metadata?: Record<string, any>;
+    files?: NoteFile[];
+}
+
+export interface NoteUpdateData {
+    title?: string;
+    content?: string;
+    tags?: string[];
+    categories?: string[];
+    summary?: string;
     metadata?: Record<string, any>;
 }
