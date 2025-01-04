@@ -23,10 +23,21 @@ import {
   quotePlugin,
   thematicBreakPlugin,
   markdownShortcutPlugin,
+  toolbarPlugin,
+  BoldItalicUnderlineToggles,
+  CodeToggle,
+  UndoRedo,
+  Separator,
+  linkPlugin,
+  imagePlugin,
+  codeBlockPlugin,
+  tablePlugin,
 } from '@mdxeditor/editor';
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { noteService } from '@/services/noteService';
 import TagManagement from './TagManagement';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -201,23 +212,25 @@ export const NoteView = ({
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      className={cn(
-                        isSaving ? 'bg-gray-200' 
-                        : 'bg-primary hover:bg-primary/80', // Use primary color
-                        'text-white'
-                      )}
-                    >
-                      {isSaving ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className={cn(
+                          isSaving ? 'bg-gray-200' : 'bg-primary hover:bg-primary/80',
+                          'text-white'
+                        )}
+                      >
+                        {isSaving ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {isSaving && <span className="text-sm text-muted-foreground">Saving...</span>}
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Save Changes</p>
@@ -351,6 +364,15 @@ export const NoteView = ({
           quotePlugin(),
           thematicBreakPlugin(),
           markdownShortcutPlugin(),
+          toolbarPlugin({
+            toolbarContents: () => (
+              <>
+                <BoldItalicUnderlineToggles />
+                <CodeToggle />
+                <UndoRedo />
+              </>
+            ),
+          }),
         ]}
       />
     </div>
