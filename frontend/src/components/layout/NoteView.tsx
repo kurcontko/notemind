@@ -5,7 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
-import { Menu, Pencil, Trash2, Loader2, Bold, Italic, Code, List, ListOrdered } from 'lucide-react';
+import { Menu, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   MDXEditor,
@@ -17,6 +17,8 @@ import {
 } from '@mdxeditor/editor';
 import { noteService } from '@/services/noteService';
 import TagManagement from './TagManagement';
+import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
 
 import '@mdxeditor/editor/style.css';
 
@@ -31,7 +33,12 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
   const [tab, setTab] = React.useState<'preview' | 'edit'>('preview');
   const [editText, setEditText] = React.useState('');
   const [editTitle, setEditTitle] = React.useState('');
+  const [editTags, setEditTags] = React.useState<string[]>([]);
   const editorRef = React.useRef<MDXEditorMethods>(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  const progressTimerRef = React.useRef<number>();
+  const { toast } = useToast();
 
   const { data: note, isLoading, refetch } = useQuery({
     queryKey: ['note', noteId],
@@ -44,6 +51,7 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     if (note) {
       setEditText(note.content || '');
       setEditTitle(note.title || '');
+      setEditTags(note.tags || []);
     }
   }, [note]);
 
@@ -51,14 +59,65 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     onEditStateChange(tab === 'edit');
   }, [tab, onEditStateChange]);
 
+  React.useEffect(() => {
+    if (isSaving) {
+      setProgress(0);
+      progressTimerRef.current = window.setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 90) {
+            if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 100);
+    } else {
+      setProgress(0);
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    }
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, [isSaving]);
+
   const handleSave = async () => {
     if (!noteId) return;
-    await noteService.update(noteId, { 
-      content: editText,
-      title: editTitle,
-    });
-    refetch();
-    setTab('preview');
+    setIsSaving(true);
+    try {
+      await noteService.update(noteId, { 
+        content: editText,
+        title: editTitle,
+        tags: editTags,
+      });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      toast({ title: "Success", description: "Note saved", variant: "default" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save your note. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+      refetch();
+      setTab('preview');
+    }
+  };
+
+  const handleTagsChange = async (newTags: string[]) => {
+    if (tab === 'edit') {
+      // In edit mode, just update the local state
+      setEditTags(newTags);
+    } else {
+      // In preview mode, update directly through the API
+      if (noteId) {
+        await noteService.update(noteId, {
+          ...note,
+          tags: newTags,
+        });
+        refetch();
+      }
+    }
   };
 
   const renderLoading = () => (
@@ -75,13 +134,13 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
   );
 
   const renderTitleSection = () => (
-    <div className="border-b pb-4">
+    <div className="pb-4">
       {tab === 'edit' ? (
         <input
           type="text"
           value={editTitle}
           onChange={(e) => setEditTitle(e.target.value)}
-          className="w-full text-2xl font-bold bg-transparent border-b border-gray-300 focus:outline-none pb-2 mb-2"
+          className="w-full text-2xl font-bold bg-transparent border-gray-300 focus:outline-none pb-2 mb-2"
         />
       ) : (
         <h1 className="text-2xl font-bold">{note?.title}</h1>
@@ -101,21 +160,15 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
     );
   };
 
-  const renderTags = () => {
-    if (!note?.tags || note.tags.length === 0) return null;
-    return (
-      <div className="flex flex-wrap gap-2">
-        {note.tags.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-full bg-purple-100 px-3 py-1 text-sm text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
-          >
-            #{tag}
-          </span>
-        ))}
-      </div>
-    );
-  };
+  const renderTagSection = () => (
+    <div className="py-4">
+      <TagManagement
+        tags={tab === 'edit' ? editTags : (note?.tags || [])}
+        onTagsChange={handleTagsChange}
+        isEditing={tab === 'edit'}
+      />
+    </div>
+  );
 
   const renderPreview = () => {
     return (
@@ -184,14 +237,17 @@ export const NoteView = ({ noteId, showMenu, onMenuClick, onEditStateChange }: N
         {renderTitleSection()}
         {renderSummary()}
         {tab === 'preview' ? renderPreview() : renderEditor()}
-        {renderTags()}
+        {renderTagSection()}
       </div>
     );
   };
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="sticky top-0 bg-background/80 backdrop-blur-sm z-10 border-b">
+      <div className="sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+        {isSaving && (
+          <Progress value={progress} className="absolute top-0 left-0 right-0 h-1 rounded-none" />
+        )}
         <div className="max-w-3xl mx-auto px-6 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
