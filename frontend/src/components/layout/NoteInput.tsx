@@ -1,38 +1,68 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Plus, Sparkles } from 'lucide-react';
+import { Paperclip, Plus, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
 
-interface MemoryInputProps {
+interface NoteInputProps {
   onSubmit: (content: string, files?: File[]) => Promise<void>;
+  onSuccess?: () => void;  // Add this line
 }
 
-export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
+export const NoteInput = ({ onSubmit, onSuccess }: NoteInputProps) => {
   const [content, setContent] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sparklesEnabled, setSparklesEnabled] = useState(true);
-
+  const [progress, setProgress] = useState(0);
+  
+  const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const progressTimerRef = useRef<number>();
 
-  /**
-   * Auto-resize textarea up to 300px
-   */
-  const adjustTextareaHeight = () => {
+  // Progress bar animation
+  useEffect(() => {
+    if (isSubmitting) {
+      setProgress(0);
+      progressTimerRef.current = window.setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 90) {
+            if (progressTimerRef.current) {
+              window.clearInterval(progressTimerRef.current);
+            }
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 100);
+    } else {
+      setProgress(0);
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+      }
+    }
+
+    return () => {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+      }
+    };
+  }, [isSubmitting]);
+
+  const adjustTextareaHeight = useCallback(() => {
     if (!textareaRef.current) return;
     const textarea = textareaRef.current;
-
     textarea.style.height = 'auto';
-    // Fix max height at 300px
     const scrollHeight = Math.min(textarea.scrollHeight, 300);
     textarea.style.height = `${scrollHeight}px`;
-  };
+  }, []);
 
   useEffect(() => {
     adjustTextareaHeight();
-  }, [content]);
+  }, [content, adjustTextareaHeight]);
 
   /**
    * Drag & drop handlers
@@ -79,46 +109,57 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
 
     setIsSubmitting(true);
     try {
-      await onSubmit(content, files);
+      const result = await onSubmit(content, files);
+      await new Promise(resolve => setTimeout(resolve, 500)); // Add minimum loading time
       setContent('');
       setFiles([]);
+      onSuccess?.();
+      toast({
+        title: "Success",
+        description: "Your note has been saved successfully.",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Error creating note:', error);
-      // Add error notification here if needed
+      toast({
+        title: "Error",
+        description: "Failed to save your note. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  /**
-   * Sparkles button handler
-   */
-  const handleSparklesClick = () => {
+  const handleSparklesClick = useCallback(() => {
     setSparklesEnabled(prev => !prev);
-  };
+  }, []);
 
-  /**
-   * Keyboard submission (Enter = submit, Shift+Enter = new line)
-   */
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      void handleSubmit();
     }
-  };
+  }, []);
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 pb-4">
       <div
         className={cn(
-          'flex flex-col w-full border border-gray-300 dark:border-gray-700 rounded-md',
+          'flex flex-col w-full border border-gray-300 dark:border-gray-700 rounded-md relative overflow-hidden',
           isDragging && 'bg-blue-50 dark:bg-blue-900/20'
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* File Preview (above the input) */}
+        {isSubmitting && (
+          <Progress 
+            value={progress} 
+            className="absolute top-0 left-0 right-0 h-1 rounded-none"
+          />
+        )}
+
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 p-2">
             {files.map((file, index) => (
@@ -129,6 +170,7 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
                 <Paperclip className="h-3 w-3" />
                 <span className="truncate max-w-xs">{file.name}</span>
                 <button
+                  type="button"
                   onClick={() => setFiles(files.filter((_, i) => i !== index))}
                   className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
@@ -139,7 +181,6 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
           </div>
         )}
 
-        {/* Textarea (occupies full width, no border) */}
         <Textarea
           ref={textareaRef}
           value={content}
@@ -154,13 +195,14 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
           style={{ height: '24px' }}
         />
 
-        <div className="mt-2 flex items-center justify-between w-full px-2">
+        <div className="mt-2 flex items-center justify-between w-full px-2 pb-2">
           <div className="flex items-center">
             <Button
               variant="ghost"
               size="icon"
               className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               asChild
+              disabled={isSubmitting}
             >
               <label>
                 <input
@@ -168,15 +210,18 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
                   multiple
                   className="hidden"
                   onChange={handleFileSelect}
+                  disabled={isSubmitting}
                 />
                 <Paperclip className="h-4 w-4" />
               </label>
             </Button>
 
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={handleSparklesClick}
+              disabled={isSubmitting}
               className={cn(
                 "transition-colors -ml-1",
                 sparklesEnabled 
@@ -189,20 +234,28 @@ export const NoteInput = ({ onSubmit }: MemoryInputProps) => {
           </div>
 
           <Button
+            type="button"
             variant="ghost"
             size="icon"
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={isSubmitting || (!content.trim() && files.length === 0)}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className={cn(
+              "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
+              "transition-all duration-200",
+              isSubmitting && "opacity-50 cursor-not-allowed"
+            )}
           >
-            <Plus className="h-4 w-4" />
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
 
-      {/* Drag & Drop Overlay */}
       {isDragging && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm">
           <div className="rounded-lg bg-white p-6 text-center dark:bg-gray-800">
             <p className="text-lg font-medium">Drop files or links here</p>
           </div>

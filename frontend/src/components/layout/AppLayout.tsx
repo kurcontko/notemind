@@ -4,16 +4,15 @@ import { Sidebar } from './Sidebar';
 import { NoteView } from './NoteView';
 import { NoteInput } from './NoteInput';
 import { cn } from '@/lib/utils';
-import { noteService } from '@/services/noteService';
+import { useNotes } from '@/hooks/useNotes';
 
 const AppLayout: FC = () => {
   const [selectedNoteId, setSelectedNoteId] = React.useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = React.useState<boolean>(true);
+  const { createNote } = useNotes();
 
   const handleNoteSubmit = async (content: string, files?: File[]) => {
-    // Handle the memory creation here
-    console.log('Creating note:', { content, files });
-    await noteService.create(content, files);
+    return createNote(content, files);
   };
 
   return (
@@ -35,10 +34,11 @@ const AppLayout: FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 h-full relative flex flex-col">
+      {/* <main className="flex-1 h-full"> */}
+      <main className="fixed top-0 left-0 right-0 z-10">
         <div className={cn(
-          "flex-1 flex flex-col",
-          !selectedNoteId && "items-center justify-center"
+          "h-full w-full",
+          !selectedNoteId && "flex items-center justify-center"
         )}>
           {/* Memory View */}
           <div className={cn(
@@ -52,12 +52,17 @@ const AppLayout: FC = () => {
             />
           </div>
 
-          {/* Memory Input */}
-          <div className={cn(
-            "w-full bg-background dark:bg-foreground",
-            selectedNoteId ? "fixed bottom-0 left-0 right-0 shadow-lg" : ""
-          )}>
-            <NoteInput onSubmit={handleNoteSubmit} />
+          {/* Note Input - Fixed at bottom */}
+          <div className="fixed bottom-0 left-0 right-0 z-10">
+            <div className={cn(
+              "w-full bg-background/95 backdrop-blur-sm dark:bg-foreground/95",
+              "shadow-lg"
+            )}>
+              <NoteInput 
+                onSubmit={handleNoteSubmit}
+                onSuccess={() => setSelectedNoteId(null)} 
+              />
+            </div>
           </div>
         </div>
       </main>
