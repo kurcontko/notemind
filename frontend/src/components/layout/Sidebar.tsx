@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotes } from '@/hooks/useNotes';
@@ -15,9 +15,42 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: SidebarProps) => {
-  const { notes, isLoading } = useNotes();
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const { notes, isLoading, fetchMoreNotes } = useNotes();
   const { query, results, isLoading: isSearchLoading, handleSearch } = useSearch();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+
+  const ITEMS_PER_PAGE = 20;
+  const SCROLL_THRESHOLD = 100; // pixels from bottom to trigger load
+
+  const loadMoreNotes = useCallback(async () => {
+    if (isLoadingMore || !hasMore || isSearchVisible) return;
+
+    setIsLoadingMore(true);
+    try {
+      const newNotes = await fetchMoreNotes(page * ITEMS_PER_PAGE);
+      if (newNotes.length < ITEMS_PER_PAGE) {
+        setHasMore(false);
+      } else {
+        setPage(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error loading more notes:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [page, hasMore, isLoadingMore, fetchMoreNotes, isSearchVisible]);
+
+  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLDivElement;
+    const { scrollTop, scrollHeight, clientHeight } = target;
+
+    if (scrollHeight - (scrollTop + clientHeight) < SCROLL_THRESHOLD) {
+      loadMoreNotes();
+    }
+  }, [loadMoreNotes]);
 
   const toggleSearch = () => {
     setIsSearchVisible(!isSearchVisible);
@@ -25,6 +58,12 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
       handleSearch('');
     }
   };
+
+  // Reset pagination when search is toggled
+  useEffect(() => {
+    setPage(1);
+    setHasMore(true);
+  }, [isSearchVisible]);
 
   return (
     <aside
@@ -64,7 +103,7 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
       </div>
 
       {/* Note List */}
-      <ScrollArea className="flex-1 w-full">
+      <ScrollArea className="flex-1 w-full" onScroll={handleScroll}>
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
@@ -116,6 +155,11 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
                 </div>
               </button>
             ))}
+            {isLoadingMore && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>
