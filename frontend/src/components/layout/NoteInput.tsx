@@ -205,7 +205,8 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
           'resize-none border-0 bg-transparent focus-visible:ring-0 w-full shadow-none',
           'min-h-[24px] transition-all duration-200 overflow-hidden px-4 pt-4',
           'focus:shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500',
-          files.length > 0 ? 'border-b border-gray-200 dark:border-gray-800' : ''
+          files.length > 0 ? 'border-b border-gray-200 dark:border-gray-800' : '',
+          '!focus:outline-none !focus:ring-0 !focus:shadow-none'
         )}
         style={{ height: '24px' }}
       />
