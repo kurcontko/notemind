@@ -187,7 +187,7 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
             <input
               type="search"
               placeholder="Search notes..."
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-700 dark:bg-gray-800"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
               value={query}
               onChange={(e) => handleSearch(e.target.value)}
               autoFocus
