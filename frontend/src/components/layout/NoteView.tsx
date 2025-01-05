@@ -40,6 +40,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import '@/styles/minimal-markdown.css';
 
 import '@mdxeditor/editor/style.css';
 import {
@@ -167,7 +168,7 @@ export const NoteView = ({
   const renderEmptyState = () => (
     <div className="flex h-96 flex-col items-center justify-center text-gray-500">
       <p className="text-lg">Select a note from the sidebar</p>
-      <p className="text-sm">or press ⌘K to create a new one</p>
+      <p className="text-sm">or press + to create a new one</p>
     </div>
   );
 
@@ -297,7 +298,40 @@ export const NoteView = ({
     if (!note?.summary || tab === 'edit') return null;
     return (
       <div className="bg-muted/50 rounded-lg p-4 text-xs text-muted-foreground">
-        {note.summary}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            code({ node, inline, className, children, style, ...props }) {
+              const match = /language-(\w+)/.exec(className || '');
+              return !inline && match ? (
+                <SyntaxHighlighter
+                  {...props}
+                  style={oneDark}
+                  language={match[1]}
+                  PreTag="div"
+                  customStyle={{
+                    margin: '1em 0',
+                    borderRadius: '0.375rem',
+                  }}
+                  codeTagProps={{
+                    style: {
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem',
+                    },
+                  }}
+                >
+                  {String(children).replace(/\n$/, '')}
+                </SyntaxHighlighter>
+              ) : (
+                <code {...props} className={className}>
+                  {children}
+                </code>
+              );
+            },
+          }}
+        >
+          {note.summary}
+        </ReactMarkdown>
       </div>
     );
   };
@@ -313,7 +347,7 @@ export const NoteView = ({
   );
 
   const renderPreview = () => (
-    <div className="prose prose-gray dark:prose-invert max-w-none">
+    <div className="markdown-preview break-words"> 
       <ReactMarkdown
         className="break-words"
         remarkPlugins={[remarkGfm]}
