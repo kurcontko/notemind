@@ -55,6 +55,13 @@ export const noteService = {
   },
 
   search: async (params: Record<string, any>) => {
+    if (params.query) {
+      params.search_text = params.query;
+      delete params.query;
+    }
+    if (!params.mode) {
+      params.mode = 'basic';
+    }
     const response = await api.get<Note[]>('/search', { params });
     return response.data;
   },
