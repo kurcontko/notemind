@@ -1,9 +1,12 @@
 from datetime import datetime
 import json
 from typing import Dict, Any, List, Optional, Tuple, Set
+import logging
+
 from azure.cosmos.aio import CosmosClient, ContainerProxy
 from azure.cosmos import PartitionKey
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from langchain_core.embeddings import Embeddings
 
 from .base import NotesDbService
 from ...models.note import Note, NoteReference
@@ -16,12 +19,14 @@ class CosmosDBNotesService(NotesDbService):
         endpoint: str,
         database_name: str,
         container_name: str,
-        credential: str
+        credential: str,
+        embeddings: Embeddings
     ):
         self.client = CosmosClient(endpoint, credential)
         self.database = self.client.get_database_client(database_name)
         self.container = self.database.get_container_client(container_name)
-
+        self.embeddings = embeddings
+        
     def _note_to_doc(self, note: Note) -> Dict[str, Any]:
         """Convert Note to Cosmos DB document"""
         return {
@@ -149,6 +154,7 @@ class CosmosDBNotesService(NotesDbService):
 
     async def vector_search(
         self,
+        query: Optional[str],
         query_embedding: List[float],
         limit: int = 10,
         min_similarity: float = 0.7,
@@ -163,6 +169,9 @@ class CosmosDBNotesService(NotesDbService):
         ORDER BY similarity DESC
         OFFSET 0 LIMIT @limit
         """
+        
+        if query:
+            query_embedding = await self.embeddings.aembed_query(query)
         
         params = [
             {"name": "@queryEmbedding", "value": query_embedding},
@@ -182,73 +191,104 @@ class CosmosDBNotesService(NotesDbService):
 
     async def hybrid_search(
         self,
-        query_embedding: List[float],
         query_text: Optional[str] = None,
+        query_embedding: Optional[List[float]] = None,
         user_id: Optional[str] = None,
         categories: Optional[str] = None,
         tags: Optional[List[str]] = None,
         entities: Optional[List[str]] = None,
         min_similarity: float = 0.7,
         limit: int = 10
-    ) -> List[Tuple[Note, float]]:
-        query_parts = [
-            "SELECT *,",
-            "vector_cosine_similarity(c.embedding, @queryEmbedding) as similarity",
-            "FROM c",
-            "WHERE c.type = 'note'",
-            "AND vector_cosine_similarity(c.embedding, @queryEmbedding) >= @minSimilarity"
-        ]
+    ) -> List[Note]:
+        """
+        Perform hybrid search using vector similarity and metadata filtering.
+        Uses Azure Cosmos DB's vector search capabilities.
+        Returns list of Notes ordered by vector similarity.
+        """
+        if not query_embedding and not query_text:
+            raise ValueError("Either query_text or query_embedding must be provided")
+            
+        if query_text and not query_embedding:
+            query_embedding = await self.embeddings.aembed_query(query_text)
+
+        # Ensure query_embedding is a list 
+        query_embedding = list(query_embedding)
         
-        params = [
-            {"name": "@queryEmbedding", "value": query_embedding},
-            {"name": "@minSimilarity", "value": min_similarity}
-        ]
+        # Build base query with vector distance calculation
+        query = """
+            SELECT *,
+            (1 - VectorDistance(c.embedding, @queryEmbedding, 'cosine')) as similarity
+            FROM c
+            WHERE c.type = 'note'
+        """
+        
+        params = []
 
+        # Add filters
+        conditions = []
+        
         if user_id:
-            query_parts.append("AND c.userId = @userId")
+            conditions.append("c.userId = @userId")
             params.append({"name": "@userId", "value": user_id})
-
+            
         if categories:
-            query_parts.append("AND ARRAY_CONTAINS(c.categories, @category)")
+            conditions.append("ARRAY_CONTAINS(c.categories, @category)")
             params.append({"name": "@category", "value": categories})
 
         if tags:
-            tag_conditions = []
+            tag_parts = []
             for i, tag in enumerate(tags):
-                param_name = f"@tag{i}"
-                tag_conditions.append(f"ARRAY_CONTAINS(c.tags, {param_name})")
-                params.append({"name": param_name, "value": tag})
-            query_parts.append(f"AND ({' OR '.join(tag_conditions)})")
+                tag_parts.append(f"ARRAY_CONTAINS(c.tags, @tag{i})")
+                params.append({"name": f"@tag{i}", "value": tag})
+            if tag_parts:
+                conditions.append(f"({' OR '.join(tag_parts)})")
 
         if entities:
-            entity_conditions = []
+            entity_parts = []
             for i, entity in enumerate(entities):
-                param_name = f"@entity{i}"
-                entity_conditions.append(f"ARRAY_CONTAINS(c.entities, {param_name})")
-                params.append({"name": param_name, "value": entity})
-            query_parts.append(f"AND ({' OR '.join(entity_conditions)})")
+                entity_parts.append(f"ARRAY_CONTAINS(c.entities, @entity{i})")
+                params.append({"name": f"@entity{i}", "value": entity})
+            if entity_parts:
+                conditions.append(f"({' OR '.join(entity_parts)})")
 
         if query_text:
-            query_parts.append("AND CONTAINS(c.content, @queryText)")
+            conditions.append("CONTAINS(c.content, @queryText)")
             params.append({"name": "@queryText", "value": query_text})
 
-        query_parts.extend([
-            "ORDER BY similarity DESC",
-            "OFFSET 0 LIMIT @limit"
+        # Add vector similarity condition using correct distance function
+        conditions.append("(1 - VectorDistance(c.embedding, @queryEmbedding, 'cosine')) >= @minSimilarity")
+        params.extend([
+            {"name": "@queryEmbedding", "value": query_embedding},
+            {"name": "@minSimilarity", "value": min_similarity}
         ])
-        params.append({"name": "@limit", "value": limit})
 
-        query = " ".join(query_parts)
-        
-        notes_with_scores = []
-        async for doc in self.container.query_items(
-            query=query,
-            parameters=params,
-            enable_scan_in_query=True
-        ):
-            score = doc.pop('similarity')
-            notes_with_scores.append((self._doc_to_note(doc), score))
-        return notes_with_scores
+        # Add conditions to query
+        if conditions:
+            query += " AND " + " AND ".join(conditions)
+
+        # Add ordering and limit - use direct integer for LIMIT
+        query += """
+            ORDER BY similarity DESC
+            OFFSET 0 LIMIT {}
+        """.format(int(limit))
+
+        # Execute query with proper error handling
+        notes = []
+        try:
+            async for doc in self.container.query_items(
+                query=query,
+                parameters=params,
+                enable_scan_in_query=True
+            ):
+                notes.append(self._doc_to_note(doc))
+        except Exception as e:
+            logging.error("Vector search query failed")
+            logging.error(f"Query: {query}")
+            logging.error(f"Parameters: {params}")
+            logging.exception(e)
+            raise
+
+        return notes
 
     async def get_recent_notes(
         self,
