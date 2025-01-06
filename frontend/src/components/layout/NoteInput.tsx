@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Plus, Sparkles, Loader2, XCircle, File } from 'lucide-react';
+import { Paperclip, Plus, Sparkles, Loader2, XCircle, File, Mic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
@@ -25,17 +25,33 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sparklesEnabled, setSparklesEnabled] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
 
   const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const progressTimerRef = useRef<number>();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameIdRef = useRef<number>();
+  const streamRef = useRef<MediaStream | null>(null); // Ref for the stream
+
+  // Constants for the waveform display
+  // The maximum samples we want to display at once
+  const SAMPLE_RATE_GUESS = 44100;   // Typical for mic streams
+  const WINDOW_SECONDS = 5;         // How many seconds to show
+  const MAX_SAMPLES = SAMPLE_RATE_GUESS * WINDOW_SECONDS; 
+  const downsampleFactor = 16;
+  const rollingBufferRef = useRef<Uint8Array>(new Uint8Array(0));
+  
 
   // Progress bar animation
   useEffect(() => {
     if (isSubmitting) {
       setProgress(0);
       progressTimerRef.current = window.setInterval(() => {
-        setProgress(prev => {
+        setProgress((prev) => {
           if (prev >= 90) {
             if (progressTimerRef.current) {
               window.clearInterval(progressTimerRef.current);
@@ -89,24 +105,29 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
     setIsDragging(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files);
-    setFiles(prev => [...prev, ...droppedFiles]);
+    setFiles((prev) => [...prev, ...droppedFiles]);
 
     // Check if the dropped item is a URL
-    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    const url =
+      e.dataTransfer.getData('text/uri-list') ||
+      e.dataTransfer.getData('text/plain');
     if (url && url.startsWith('http')) {
-      setContent(prev => (prev ? `${prev}\n${url}` : url));
+      setContent((prev) => (prev ? `${prev}\n${url}` : url));
     }
   }, []);
 
   /**
    * File upload handler
    */
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files);
-      setFiles(prev => [...prev, ...selectedFiles]);
-    }
-  }, []);
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) {
+        const selectedFiles = Array.from(e.target.files);
+        setFiles((prev) => [...prev, ...selectedFiles]);
+      }
+    },
+    []
+  );
 
   /**
    * Submit handler
@@ -119,21 +140,21 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
     setIsSubmitting(true);
     try {
       await onSubmit(content, files);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Add minimum loading time
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Add minimum loading time
       setContent('');
       setFiles([]);
       onSuccess?.();
       toast({
-        title: "Success",
-        description: "Your note has been saved successfully.",
-        variant: "default",
+        title: 'Success',
+        description: 'Your note has been saved successfully.',
+        variant: 'default',
       });
     } catch (error) {
       console.error('Error creating note:', error);
       toast({
-        title: "Error",
-        description: "Failed to save your note. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to save your note. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsSubmitting(false);
@@ -141,7 +162,7 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
   };
 
   const handleSparklesClick = useCallback(() => {
-    setSparklesEnabled(prev => !prev);
+    setSparklesEnabled((prev) => !prev);
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -155,11 +176,203 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
     setFiles(files.filter((_, i) => i !== index));
   };
 
+  /**
+   * Voice recording handlers
+   */
+  const startRecording = async () => {
+    try {
+      rollingBufferRef.current = new Uint8Array(0); // reset the rolling buffer
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048; // Increase for better waveform detail
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          // Create a Blob with the audio data
+          const audioBlob = new Blob([event.data], { type: 'audio/wav' });
+
+          const now = new Date();
+          const datetime = now.toISOString().replace(/[:.]/g, '-'); // Format: YYYY-MM-DDTHH-mm-ss-SSS
+          const filename = `recording-${datetime}.wav`;
+
+          // Create a File-like object with name and lastModified properties
+          const audioFile = Object.assign(audioBlob, {
+            name: filename,
+            lastModified: Date.now(),
+          });
+
+          // Update the files state immediately with the new audio file
+          setFiles((prev) => [...prev, audioFile as File]);
+        }
+      };
+
+      recorder.onstop = () => {
+        // This will be handled in stopRecording now
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      drawWaveform(); // Start the waveform animation
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast({
+        title: 'Error',
+        description:
+          'Failed to start recording. Please check your microphone permissions.',
+        variant: 'destructive',
+      });
+      setIsRecording(false); // Ensure isRecording is false in case of error
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+    }
+    setIsRecording(false);
+
+    // Stop the stream tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    // Disconnect and clean up the analyser and context
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    // Cancel any pending animation frame
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+    }
+
+    // Clear the canvas
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  };
+
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const drawWaveform = useCallback(() => {
+    const canvas = canvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    analyser.fftSize = 2048;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    analyser.getByteTimeDomainData(dataArray);
+
+    let newBuffer = new Uint8Array(rollingBufferRef.current.length + bufferLength);
+    newBuffer.set(rollingBufferRef.current, 0);
+    newBuffer.set(dataArray, rollingBufferRef.current.length);
+
+    if (newBuffer.length > MAX_SAMPLES) {
+      newBuffer = newBuffer.slice(newBuffer.length - MAX_SAMPLES);
+    }
+    rollingBufferRef.current = newBuffer;
+
+    canvas.width = window.innerWidth * 0.8;
+    canvas.height = 300;
+    ctx.fillStyle = 'rgb(243, 244, 246)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = isRecording
+      ? 'rgb(239, 68, 68)' // Red
+      : 'rgb(156, 163, 175)';
+    ctx.beginPath();
+
+    // Downsampling Implementation:
+    const rollingLength = rollingBufferRef.current.length;
+    const downsampledData = [];
+
+    for (let i = 0; i < rollingLength; i += downsampleFactor) {
+      let sum = 0;
+      let count = 0; // Keep track of the number of samples in the chunk
+
+      // Calculate the average for the chunk:
+      for (let j = 0; j < downsampleFactor; j++) {
+        if (i + j < rollingLength) {
+          sum += rollingBufferRef.current[i + j];
+          count++;
+        }
+      }
+
+      downsampledData.push(sum / count); // Add the average to the downsampled data
+    }
+
+    const sliceWidth = canvas.width / downsampledData.length;
+    let x = 0;
+
+    for (let i = 0; i < downsampledData.length; i++) {
+      const v = downsampledData[i] / 128.0;
+      const y = v * (canvas.height / 2);
+
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+      x += sliceWidth;
+    }
+
+    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.stroke();
+
+    animationFrameIdRef.current = requestAnimationFrame(drawWaveform);
+  }, [isRecording, downsampleFactor]); // Add downsampleFactor to dependency array
+
+  useEffect(() => {
+    if (isRecording && analyserRef.current && canvasRef.current) {
+      drawWaveform(); // Start drawing when recording starts
+    }
+    return () => {
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
+    };
+  }, [isRecording, drawWaveform]);
+
   return (
     <div
       className={cn(
         'w-full border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 relative overflow-hidden transition-all duration-300',
-        isExpanded ? 'rounded-t-xl rounded-b-none' : 'rounded-xl', // Apply rounded corners conditionally
+        isExpanded ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -170,6 +383,18 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
           value={progress}
           className="absolute top-0 left-0 right-0 h-1 rounded-none z-10"
         />
+      )}
+
+      {/* Waveform Canvas */}
+      {isRecording && (
+        <div className="absolute top-0 left-0 right-0 h-24">
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full"
+            width={500}
+            height={100}
+          />
+        </div>
       )}
 
       {files.length > 0 && (
@@ -205,8 +430,8 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
           'resize-none border-0 bg-transparent focus-visible:ring-0 w-full shadow-none',
           'min-h-[24px] transition-all duration-200 overflow-hidden px-4 pt-4',
           'focus:shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500',
-          files.length > 0 ? 'border-b border-gray-200 dark:border-gray-800' : '',
-          '!focus:outline-none !focus:ring-0 !focus:shadow-none'
+          '!focus:outline-none !focus:ring-0 !focus:shadow-none',
+          isRecording ? 'mt-24' : '' // Keep the margin-top for recording
         )}
         style={{ height: '24px' }}
       />
@@ -221,7 +446,7 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
                   variant="ghost"
                   size="icon"
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isRecording}
                 >
                   <label>
                     <input
@@ -229,7 +454,7 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
                       multiple
                       className="hidden"
                       onChange={handleFileSelect}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isRecording}
                     />
                     <Paperclip className="h-5 w-5" />
                   </label>
@@ -248,52 +473,84 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
                   variant="ghost"
                   size="icon"
                   onClick={handleSparklesClick}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isRecording}
                   className={cn(
-                    "transition-colors",
+                    'transition-colors',
                     sparklesEnabled
-                      ? "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-                      : "text-gray-400 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-500"
+                      ? 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+                      : 'text-gray-400 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-500'
                   )}
                 >
                   <Sparkles className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{sparklesEnabled ? "Disable AI" : "Enable AI"}</p>
+                <p>{sparklesEnabled ? 'Disable AI' : 'Enable AI'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
 
-        {/* Submit Button with Tooltip */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                onClick={() => void handleSubmit()}
-                disabled={isSubmitting || (!content.trim() && files.length === 0)}
-                className={cn(
-                  "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-                  "transition-all duration-200",
-                  isSubmitting && "opacity-50 cursor-not-allowed"
-                )}
-                variant="ghost"
-                size="icon"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-5 w-5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Save Note</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* Microphone and Submit Button */}
+        <div className="flex items-center space-x-2">
+          {/* Microphone Button with Tooltip */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={handleMicClick}
+                  disabled={isSubmitting}
+                  className={cn(
+                    'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+                    'transition-colors',
+                    isRecording &&
+                      'text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300'
+                  )}
+                  variant="ghost"
+                  size="icon"
+                >
+                  <Mic className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isRecording ? 'Stop Recording' : 'Start Recording'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Submit Button with Tooltip */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={() => void handleSubmit()}
+                  disabled={
+                    isSubmitting ||
+                    (!content.trim() && files.length === 0)
+                  }
+                  className={cn(
+                    'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+                    'transition-all duration-200',
+                    isSubmitting && 'opacity-50 cursor-not-allowed'
+                  )}
+                  variant="ghost"
+                  size="icon"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Save Note</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
 
       {isDragging && (
