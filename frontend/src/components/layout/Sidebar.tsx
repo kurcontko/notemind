@@ -198,7 +198,7 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
 
       {/* Note List */}
       <ScrollArea className="flex-1 w-full">
-        {isLoading ? (
+        {isLoading || (isSearchVisible && isSearchLoading) ? (
           <div className="flex h-40 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
           </div>
