@@ -101,7 +101,7 @@ class CosmosDBNotesService(NotesDbService):
         search_text: Optional[str] = None,
         limit: int = 10
     ) -> List[Note]:
-        query_parts = ["SELECT * FROM c WHERE c.type = 'note'"]
+        query_parts = ["SELECT * FROM c WHERE 1=1 AND c.type = 'note'"]
         params = []
 
         if user_id:
@@ -121,18 +121,30 @@ class CosmosDBNotesService(NotesDbService):
             query_parts.append(f"AND ({' OR '.join(tag_conditions)})")
 
         if search_text:
-            query_parts.append("AND CONTAINS(c.content, @searchText)")
+            search_conditions = [
+                "CONTAINS(LOWER(c.content), LOWER(@searchText))",
+                "CONTAINS(LOWER(c.title), LOWER(@searchText))",
+                "CONTAINS(LOWER(c.summary), LOWER(@searchText))",
+                "ARRAY_CONTAINS(c.tags, LOWER(@searchText))",  # Use ARRAY_CONTAINS for tags
+                "ARRAY_CONTAINS(c.categories, LOWER(@searchText))",  # Use ARRAY_CONTAINS for categories
+                "ARRAY_CONTAINS(c.entities, LOWER(@searchText))"  # Use ARRAY_CONTAINS for entities
+            ]
+            query_parts.append(f"AND ({' OR '.join(search_conditions)})")
             params.append({"name": "@searchText", "value": search_text})
 
         query = " ".join(query_parts)
-        
+
+        print(query)
         notes = []
-        async for doc in self.container.query_items(
-            query=query,
-            parameters=params,
-            max_item_count=limit
-        ):
-            notes.append(self._doc_to_note(doc))
+        try:
+            async for doc in self.container.query_items(
+                query=query,
+                parameters=params,
+                max_item_count=limit
+            ):
+                notes.append(self._doc_to_note(doc))
+        except Exception as e:
+            print(f"Error searching notes: {str(e)}")
         return notes
 
     async def vector_search(
