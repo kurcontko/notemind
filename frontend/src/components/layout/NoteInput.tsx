@@ -177,111 +177,10 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
   };
 
   /**
-   * Voice recording handlers
+   * -----------
+   * AUDIO LOGIC
+   * -----------
    */
-  const startRecording = async () => {
-    try {
-      rollingBufferRef.current = new Uint8Array(0); // reset the rolling buffer
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const audioCtx = new AudioContext();
-      audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048; // Increase for better waveform detail
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          // Create a Blob with the audio data
-          const audioBlob = new Blob([event.data], { type: 'audio/wav' });
-
-          const now = new Date();
-          const datetime = now.toISOString().replace(/[:.]/g, '-'); // Format: YYYY-MM-DDTHH-mm-ss-SSS
-          const filename = `recording-${datetime}.wav`;
-
-          // Create a File-like object with name and lastModified properties
-          const audioFile = Object.assign(audioBlob, {
-            name: filename,
-            lastModified: Date.now(),
-          });
-
-          // Update the files state immediately with the new audio file
-          setFiles((prev) => [...prev, audioFile as File]);
-        }
-      };
-
-      recorder.onstop = () => {
-        // This will be handled in stopRecording now
-      };
-
-      recorder.start();
-      setIsRecording(true);
-      drawWaveform(); // Start the waveform animation
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      toast({
-        title: 'Error',
-        description:
-          'Failed to start recording. Please check your microphone permissions.',
-        variant: 'destructive',
-      });
-      setIsRecording(false); // Ensure isRecording is false in case of error
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (animationFrameIdRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-    }
-    setIsRecording(false);
-
-    // Stop the stream tracks
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-
-    // Disconnect and clean up the analyser and context
-    if (analyserRef.current) {
-      analyserRef.current.disconnect();
-      analyserRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    // Cancel any pending animation frame
-    if (animationFrameIdRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-    }
-
-    // Clear the canvas
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-  };
-
-  const handleMicClick = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
   const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current;
     const analyser = analyserRef.current;
@@ -295,52 +194,55 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
+    // Get current audio data
     analyser.getByteTimeDomainData(dataArray);
 
+    // Append to rolling buffer
     let newBuffer = new Uint8Array(rollingBufferRef.current.length + bufferLength);
     newBuffer.set(rollingBufferRef.current, 0);
     newBuffer.set(dataArray, rollingBufferRef.current.length);
 
+    // Keep only the last MAX_SAMPLES
     if (newBuffer.length > MAX_SAMPLES) {
       newBuffer = newBuffer.slice(newBuffer.length - MAX_SAMPLES);
     }
     rollingBufferRef.current = newBuffer;
 
+    // Setup canvas
     canvas.width = window.innerWidth * 0.8;
     canvas.height = 300;
     ctx.fillStyle = 'rgb(243, 244, 246)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Draw line
     ctx.lineWidth = 2;
     ctx.strokeStyle = isRecording
       ? 'rgb(239, 68, 68)' // Red
       : 'rgb(156, 163, 175)';
     ctx.beginPath();
 
-    // Downsampling Implementation:
+    // Downsample the rolling buffer for smoother drawing
     const rollingLength = rollingBufferRef.current.length;
     const downsampledData = [];
 
     for (let i = 0; i < rollingLength; i += downsampleFactor) {
       let sum = 0;
-      let count = 0; // Keep track of the number of samples in the chunk
-
-      // Calculate the average for the chunk:
+      let count = 0;
       for (let j = 0; j < downsampleFactor; j++) {
         if (i + j < rollingLength) {
           sum += rollingBufferRef.current[i + j];
           count++;
         }
       }
-
-      downsampledData.push(sum / count); // Add the average to the downsampled data
+      downsampledData.push(sum / count);
     }
 
+    // Plot wave
     const sliceWidth = canvas.width / downsampledData.length;
     let x = 0;
 
     for (let i = 0; i < downsampledData.length; i++) {
-      const v = downsampledData[i] / 128.0;
+      const v = downsampledData[i] / 128.0; // scale from 0-255 to around -1..1
       const y = v * (canvas.height / 2);
 
       if (i === 0) {
@@ -355,11 +257,126 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
     ctx.stroke();
 
     animationFrameIdRef.current = requestAnimationFrame(drawWaveform);
-  }, [isRecording, downsampleFactor]); // Add downsampleFactor to dependency array
+  }, [isRecording, downsampleFactor]);
 
+  /**
+   * Start mic recording
+   */
+  const startRecording = async () => {
+    try {
+      rollingBufferRef.current = new Uint8Array(0); // reset the rolling buffer
+
+      // Request mic
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Setup audio context + analyser
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      // Choose a browser-supported audio MIME type
+      const options = { mimeType: 'audio/webm; codecs=opus' };
+      const recorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = recorder;
+
+      // Called every time recorder has data
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          // Use the actual event.data.type rather than forcing wav
+          const audioBlob = new Blob([event.data], { type: event.data.type });
+
+          // Give it a .webm extension to match the mimeType 
+          const now = new Date();
+          const datetime = now.toISOString().replace(/[:.]/g, '-');
+          const filename = `recording-${datetime}.webm`; 
+
+          // Convert Blob to File
+          const audioFile = Object.assign(audioBlob, {
+            name: filename,
+            lastModified: Date.now(),
+          });
+
+          // Add file to state
+          setFiles((prev) => [...prev, audioFile as File]);
+        }
+      };
+
+      // Start recording + drawing waveform
+      recorder.start();
+      setIsRecording(true);
+      drawWaveform();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast({
+        title: 'Error',
+        description:
+          'Failed to start recording. Please check your microphone permissions.',
+        variant: 'destructive',
+      });
+      setIsRecording(false);
+    }
+  };
+
+  /**
+   * Stop mic recording
+   */
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+    }
+    setIsRecording(false);
+
+    // Stop all tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    // Disconnect and cleanup
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    // Clear canvas
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  };
+
+  /**
+   * Mic button click
+   */
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      void startRecording();
+    }
+  };
+
+  /**
+   * If recording, draw waveform on each animation frame
+   */
   useEffect(() => {
     if (isRecording && analyserRef.current && canvasRef.current) {
-      drawWaveform(); // Start drawing when recording starts
+      drawWaveform();
     }
     return () => {
       if (animationFrameIdRef.current) {
@@ -437,7 +454,7 @@ export const NoteInput = ({ onSubmit, onSuccess, isExpanded = false }: NoteInput
       />
 
       <div className="mt-3 flex items-center justify-between w-full px-3 pb-3">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
           {/* Attach File Button with Tooltip */}
           <TooltipProvider>
             <Tooltip>
