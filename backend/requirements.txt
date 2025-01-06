@@ -9,14 +9,22 @@ azure-cosmos
 azure-storage-blob
 azure-identity
 azure-search-documents
+azure-ai-textanalytics
+azure-ai-documentintelligence
+azure-ai-vision-imageanalysis
 
 gremlinpython
 
 openai
+tiktoken
 
 llama-index
 llama-index-readers-web
 llama-index-readers-file
+llama-index-readers-reddit
+llama-index-readers-twitter
+llama-index-readers-wikipedia
+llama-index-readers-youtube-transcript
 
 langchain
 langchain-openai
@@ -24,4 +32,4 @@ langchain-openai
 python-dotenv
 
 markdownify
-tiktoken
+moviepy
