@@ -346,6 +346,7 @@ export const NoteView = ({
         tags={isEditing ? editTags : note?.tags || []}
         onTagsChange={handleTagsChange}
         isEditing={isEditing}
+        tagSize={isEditing ? 'normal' : 'small'} // Pass tag size prop
       />
     </div>
   );

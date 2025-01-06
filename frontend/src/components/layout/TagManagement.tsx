@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/popover';
 import { Plus, X, Tag as TagIcon } from 'lucide-react';
 
-const TagManagement = ({ tags = [], onTagsChange, isEditing }) => {
+const TagManagement = ({ tags = [], onTagsChange, isEditing, tagSize }) => {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState('');
 
@@ -71,12 +71,12 @@ const TagManagement = ({ tags = [], onTagsChange, isEditing }) => {
         </Popover>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${tagSize === 'small' ? 'text-xs font-normal' : 'text-sm font-bold'}`}>
         {tags.map((tag) => (
           <Badge
             key={tag}
             variant="secondary"
-            className="flex items-center gap-1 px-3 py-1 text-sm"
+            className={`flex items-center gap-1 px-2 py-0.5 ${tagSize === 'small' ? 'text-xs font-normal' : 'text-sm font-bold'}`}
           >
             <TagIcon className="h-3 w-3 opacity-70" />
             {tag}
