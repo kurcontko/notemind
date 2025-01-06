@@ -41,10 +41,9 @@ class ContentChains:
             Include main topics, key facts, and important details.
             
             Content: {content}
-            Context: {context}
             
             Summary:""",
-            input_variables=["content", "context"]
+            input_variables=["content"]
         )
         return prompt | self.llm | parser
 
