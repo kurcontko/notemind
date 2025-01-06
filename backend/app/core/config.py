@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     
+    # Azure Document Intelligence
+    AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: str = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "")
+    AZURE_DOCUMENT_INTELLIGENCE_KEY: str = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", "")
+
+    # Azure Text Analytics
+    AZURE_TEXT_ANALYTICS_ENDPOINT: str = os.getenv("AZURE_TEXT_ANALYTICS_ENDPOINT", "")
+    AZURE_TEXT_ANALYTICS_KEY: str = os.getenv("AZURE_TEXT_ANALYTICS_KEY", "")
+    
+    # Azure Machine Vision
+    AZURE_COMPUTER_VISION_ENDPOINT: str = os.getenv("AZURE_MACHINE_VISION_ENDPOINT", "") 
+    AZURE_COMPUTER_VISION_KEY: str = os.getenv("AZURE_MACHINE_VISION_KEY", "")
+    
     # OpenAI API
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
