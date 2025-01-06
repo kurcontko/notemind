@@ -74,11 +74,15 @@ class Note(NoteBase):
         }
 
 
-class NoteUpdate(Note):
+class NoteUpdate(NoteBase):
     files: List[UploadFile] = Field(
         default_factory=list,
         description="List of files to be uploaded with the note"
     )
+    metadata: Optional[Dict[str, Any]] = Field(None,
+        description="Additional metadata for the note")
+    user_id: Optional[str] = Field(None,
+        description="ID of the note owner")
 
 
 class NoteResponse(Note):

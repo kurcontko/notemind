@@ -43,26 +43,21 @@ class Note(BaseModel):
     
     def add_file_content(self, content: FileContent) -> 'Note':
         self.content_map[content.content_id] = content
-        md = self.content
-        md += "\n---"
-        if content.storage_url:
-            md += f"\n![{content.content_id}]({content.storage_url})"
+        md = self.content or ''
         if content.content:
-            md += f"\n{content.content}"
-        md += "\n---"
-        self.content = md
+            md += f"\n\n{content.content}"  # Preserve content's existing newlines
+        self.content = md.strip()
         return self
     
     def add_content(self, content: Union[BaseContent, FileContent]) -> 'Note':
         if isinstance(content, FileContent):
             return self.add_file_content(content)
-        md = self.content
-        md += "\n\n"
-        if content.preview:
-            md += f"\n{content.preview}"
+        md = self.content or ''
+        # if content.preview:
+        #     md += f"\n\n{content.preview}"  # Preserve preview's existing newlines
         if content.content:
-            md += f"\n{content.content}"
-        self.content = md
+            md += f"\n\n{content.content}"  # Preserve content's existing newlines
+        self.content = md.strip()
         return self
     
     def to_frontend(self) -> 'FrontendNote':
