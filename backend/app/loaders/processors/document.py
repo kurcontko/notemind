@@ -46,30 +46,68 @@ from markdownify import markdownify as md
 from ...models.content import ContentType, ContentUnion, TextContent, ImageContent, VideoContent, FileContent, LinkContent
 from ...models.note import Note
 from .base import ContentProcessor
+from ...services.azure.azure_document import AzureDocumentIntelligence
 
 
 class DocumentProcessor(ContentProcessor):
+    def __init__(
+        self, 
+        blob_service: BlobServiceClient, 
+        container_name: str, 
+        azure_doc_intelligence: AzureDocumentIntelligence
+    ):
+        """
+        Initialize ImageProcessor with Azure OCR capability.
+        
+        Args:
+            azure_ocr (AzureOCR): Instance of AzureOCR class for text extraction
+        """
+        self.azure_doc_intelligence = azure_doc_intelligence
+        super().__init__(blob_service, container_name)
+        
     async def process(self, file: UploadFile) -> FileContent:
         content = await file.read()
-        storage_url = await self._save_to_blob(content, file.filename)
+        blob = await self._save_to_blob(content, file.filename)
         
-        # Use appropriate LlamaIndex loader based on file type
-        ext = file.filename.lower().split('.')[-1]
-        loader = None
-        
-        if ext == 'pdf':
-            loader = PyMuPDFReader()
-        elif ext in ['docx', 'doc']:
-            loader = DocxReader()
-        
-        extracted_text = None
-        if loader:
-            documents = loader.load_data(file=io.BytesIO(content))
-            extracted_text = "\n\n".join(doc.text for doc in documents)
-        
-        return FileContent(
-            storage_url=storage_url,
-            original_filename=file.filename,
-            preview=f"File: {file.filename}",
-            content=extracted_text
-        )
+        try:
+            # Extract text using Azure Document Intelligence
+            extracted_text = await self.azure_doc_intelligence.get_markdown_content(content)
+            
+            # If Azure processing fails, fall back to LlamaIndex loaders
+            if not extracted_text:
+                ext = file.filename.lower().split('.')[-1]
+                loader = None
+                
+                if ext == 'pdf':
+                    loader = PyMuPDFReader()
+                elif ext in ['docx', 'doc']:
+                    loader = DocxReader()
+                else:
+                    loader = FlatReader()
+                
+                if loader:
+                    documents = loader.load_data(file=io.BytesIO(content))
+                    extracted_text = "\n\n".join(doc.text for doc in documents)
+            
+            return FileContent(
+                storage_url=blob.get("url"),
+                storage_path=blob.get("path"),
+                mime_type=blob.get("mime_type"),
+                size_bytes=blob.get("size"),
+                original_filename=file.filename,
+                preview=f"File: {file.filename}",
+                content=extracted_text
+            )
+            
+        except Exception as e:
+            # Log the error and fall back to basic file content
+            print(f"Error processing document with Azure: {str(e)}")
+            return FileContent(
+                storage_url=blob.get("url"),
+                storage_path=blob.get("path"),
+                mime_type=blob.get("mime_type"),
+                size_bytes=blob.get("size"),
+                original_filename=file.filename,
+                preview=f"File: {file.filename}",
+                content=None
+            )
