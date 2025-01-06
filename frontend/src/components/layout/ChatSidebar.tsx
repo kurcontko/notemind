@@ -21,29 +21,48 @@ export const ChatSidebar = ({ isOpen, onClose }: ChatSidebarProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // Function to get the base URL (same as in your api.ts)
+  const getBaseUrl = () => {
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    if (import.meta.env.DEV) {
+      return 'http://localhost:8000/api/v1';
+    }
+    return '/api/v1';
+  };
+
   const handleSend = async () => {
     if (input.trim() === '' || isLoading) return;
 
     const newUserMessage: Message = { role: 'user', content: input };
-    setMessages(prev => [...prev, newUserMessage]);
+    setMessages((prev) => [...prev, newUserMessage]);
     setInput('');
     setIsLoading(true);
 
     try {
-      const response = await api.post('/chat', {
-        messages: [...messages, newUserMessage],
-      }, {
+      // Construct the full URL manually
+      const url = `${getBaseUrl()}/chat`; 
+
+      const response = await fetch(url, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream', // Important for streaming
         },
+        body: JSON.stringify({
+          messages: [...messages, newUserMessage],
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
       // Initialize an empty message for the assistant
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+      // Check for non-2xx status codes
+      if (!response.ok) {
+        const errorData = await response.text(); // Get error response as text
+        throw new Error(`Network response was not ok: ${response.status} - ${errorData}`);
+      }
 
       const reader = response.body
         .pipeThrough(new TextDecoderStream())
@@ -52,30 +71,27 @@ export const ChatSidebar = ({ isOpen, onClose }: ChatSidebarProps) => {
       try {
         while (true) {
           const { value, done } = await reader.read();
-          
+
           if (done) break;
-          
-          // Split the chunk into lines and process each line
+
           const lines = value.split('\n');
-          
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(5).trim();
-              
+              const data = line.slice(6).trim(); // 6 to account for "data: "
+
               if (data === '[DONE]') continue;
-              
+
               try {
                 const parsed = JSON.parse(data);
-                
+
                 if ('content' in parsed) {
-                  setMessages(prev => {
+                  setMessages((prev) => {
                     const newMessages = [...prev];
                     const lastMessage = newMessages[newMessages.length - 1];
                     if (lastMessage.role === 'assistant') {
-                      // Simply replace the content instead of appending
                       newMessages[newMessages.length - 1] = {
                         ...lastMessage,
-                        content: parsed.content
+                        content: parsed.content,
                       };
                     }
                     return newMessages;
@@ -92,10 +108,13 @@ export const ChatSidebar = ({ isOpen, onClose }: ChatSidebarProps) => {
       }
     } catch (error) {
       console.error('Error:', error);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Sorry, there was an error processing your request.',
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Sorry, there was an error processing your request.',
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
