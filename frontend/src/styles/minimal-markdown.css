@@ -1,0 +1,44 @@
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview h1 {
+  font-size: 2em;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5em;
+}
+
+.markdown-preview h3 {
+  font-size: 1.17em;
+}
+
+.markdown-preview h4 {
+  font-size: 1em;
+}
+
+.markdown-preview h5 {
+  font-size: 0.83em;
+}
+
+.markdown-preview h6 {
+  font-size: 0.67em;
+}
+
+.markdown-preview a {
+  color: blue; /* Or any color you prefer */
+  text-decoration: underline;
+}
+
+.markdown-preview a:hover {
+  text-decoration: none;
+}
