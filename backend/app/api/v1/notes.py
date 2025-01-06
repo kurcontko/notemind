@@ -50,7 +50,7 @@ async def read_note(
 
 @router.put("/{note_id}", response_model=NoteResponse)
 async def update_note(
-    note_id: int,
+    note_id: str,
     note: NoteUpdate,
     loader: NotesLoader = Depends(get_notes_loader),
     service: NotesDbService = Depends(get_note_service),
