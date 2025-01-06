@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotes } from '@/hooks/useNotes';
 import { formatDistanceToNow, isToday, isYesterday, isThisWeek, parseISO } from 'date-fns';
-import { PanelLeft, FileText, Loader2, Search } from 'lucide-react';
+import { SquarePen, PanelLeft, FileText, Loader2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSearch } from '@/hooks/useSearch';
 
@@ -11,7 +11,7 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   selectedNoteId: string | null;
-  onNoteSelect: (id: string) => void;
+  onNoteSelect: (id: string | null) => void;
 }
 
 interface Note {
@@ -170,10 +170,20 @@ export const Sidebar = ({ isOpen, onClose, selectedNoteId, onNoteSelect }: Sideb
       {/* Header */}
       <div className="flex flex-col flex-shrink-0">
         <div className="flex h-14 items-center justify-between px-4">
-          <h2 className="text-sm font-medium text-gray-600 dark:text-gray-300">Notes</h2>
-          <div className="flex items-center gap-2">
+          <div className="font-bold text-m">
+            <span className="text-primary">Note</span>
+            <span className="text-muted-foreground">mind</span>
+          </div>
+          <div className="flex items-center space-x-1">
             <Button variant="ghost" size="icon" onClick={toggleSearch}>
               <Search className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => onNoteSelect(null)}
+            >
+              <SquarePen className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <PanelLeft className="h-4 w-4" />
