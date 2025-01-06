@@ -53,3 +53,14 @@ async def search_endpoint(
             raise HTTPException(status_code=400, detail="Invalid search mode")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tags", response_model=List[NoteResponse])
+async def get_tags(
+    service: NotesDbService = Depends(get_note_service),
+    current_user = Depends(get_current_user)
+):
+    try:
+        return await service.get_distinct_tags(current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
