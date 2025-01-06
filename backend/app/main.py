@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
-from .api.v1 import notes, search#, users
+from .api.v1 import notes, search, chat
 from .core.config import settings
 from .services.db.cosmos_db import CosmosDBNotesService
 
@@ -19,7 +19,8 @@ async def lifespan(app: FastAPI):
         endpoint=settings.AZURE_COSMOS_URI,
         database_name=settings.AZURE_COSMOS_DATABASE,
         container_name=settings.AZURE_COSMOS_CONTAINER,
-        credential=settings.AZURE_COSMOS_KEY
+        credential=settings.AZURE_COSMOS_KEY,
+        embeddings=None
     )
     
     # Initialize container on startup
@@ -74,3 +75,4 @@ async def health_check():
 app.include_router(notes.router, prefix="/api/v1")
 #app.include_router(users.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
